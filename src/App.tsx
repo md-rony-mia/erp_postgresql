@@ -105,6 +105,63 @@ const LazyLoadingFallback = () => (
   </div>
 );
 
+/**
+ * Fast structural check to determine if a real-time Firestore collection snapshot
+ * actually differs from the currently held React state array without expensive
+ * full-array JSON.stringify serialization.
+ */
+function areCollectionsEqual<T extends Record<string, any>>(
+  newArr: T[] | undefined | null,
+  oldArr: T[] | undefined | null
+): boolean {
+  if (newArr === oldArr) return true;
+  if (!newArr || !oldArr) return !newArr && !oldArr;
+  if (newArr.length !== oldArr.length) return false;
+
+  for (let i = 0; i < newArr.length; i++) {
+    const a = newArr[i];
+    const b = oldArr[i];
+    if (a === b) continue;
+    if (!a || !b) return false;
+    if (a.id !== b.id) return false;
+
+    const tA = a.updatedAt || a.lastUpdated || a.updated_at || a.date;
+    const tB = b.updatedAt || b.lastUpdated || b.updated_at || b.date;
+    if (tA || tB) {
+      if (tA !== tB) return false;
+    }
+    if (
+      a.total !== b.total ||
+      a.amount !== b.amount ||
+      a.stock !== b.stock ||
+      a.status !== b.status ||
+      a.name !== b.name ||
+      a.title !== b.title ||
+      a.price !== b.price ||
+      a.cost !== b.cost
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function areSettingsEqual(a: any, b: any): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const k of keysA) {
+    if (typeof a[k] === 'object' && a[k] !== null) {
+      if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) return false;
+    } else if (a[k] !== b[k]) {
+      return false;
+    }
+  }
+  return true;
+}
+
 function AppContent() {
   const { windows, openWindow } = useWindowManager();
   const hasActiveUnminimizedWindow = windows.some((win) => win.isActive && !win.isMinimized);
@@ -461,7 +518,7 @@ function AppContent() {
                     ? sanitizedSettings.usersList
                     : DEFAULT_SETTINGS.usersList,
               };
-              if (JSON.stringify(mergedSettings) !== JSON.stringify(latestStateRef.current.settings)) {
+              if (!areSettingsEqual(mergedSettings, latestStateRef.current.settings)) {
                 isRemoteUpdateRef.current['settings'] = true;
                 setSettings(mergedSettings as AppSettings);
               }
@@ -471,7 +528,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Product>('products', (items) => {
-            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.products)) {
+            if (!areCollectionsEqual(items || [], latestStateRef.current.products)) {
               isRemoteUpdateRef.current['products'] = true;
               setProducts(items || []);
             }
@@ -480,7 +537,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Customer>('customers', (items) => {
-            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.customers)) {
+            if (!areCollectionsEqual(items || [], latestStateRef.current.customers)) {
               isRemoteUpdateRef.current['customers'] = true;
               setCustomers(items || []);
             }
@@ -489,7 +546,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Supplier>('suppliers', (items) => {
-            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.suppliers)) {
+            if (!areCollectionsEqual(items || [], latestStateRef.current.suppliers)) {
               isRemoteUpdateRef.current['suppliers'] = true;
               setSuppliers(items || []);
             }
@@ -498,7 +555,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Invoice>('invoices', (items) => {
-            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.invoices)) {
+            if (!areCollectionsEqual(items || [], latestStateRef.current.invoices)) {
               isRemoteUpdateRef.current['invoices'] = true;
               setInvoices(items || []);
             }
@@ -507,7 +564,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<PurchaseOrder>('purchaseOrders', (items) => {
-            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.purchaseOrders)) {
+            if (!areCollectionsEqual(items || [], latestStateRef.current.purchaseOrders)) {
               isRemoteUpdateRef.current['purchaseOrders'] = true;
               setPurchaseOrders(items || []);
             }
@@ -516,7 +573,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<BankAccount>('bankAccounts', (items) => {
-            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.bankAccounts)) {
+            if (!areCollectionsEqual(items || [], latestStateRef.current.bankAccounts)) {
               isRemoteUpdateRef.current['bankAccounts'] = true;
               setBankAccounts(items || []);
             }
@@ -525,7 +582,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Transaction>('transactions', (items) => {
-            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.transactions)) {
+            if (!areCollectionsEqual(items || [], latestStateRef.current.transactions)) {
               isRemoteUpdateRef.current['transactions'] = true;
               setTransactions(items || []);
             }
@@ -534,7 +591,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<AccountHead>('accountHeads', (items) => {
-            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.accountHeads)) {
+            if (!areCollectionsEqual(items || [], latestStateRef.current.accountHeads)) {
               isRemoteUpdateRef.current['accountHeads'] = true;
               setAccountHeads(items || []);
             }
@@ -543,7 +600,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Employee>('employees', (items) => {
-            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.employees)) {
+            if (!areCollectionsEqual(items || [], latestStateRef.current.employees)) {
               isRemoteUpdateRef.current['employees'] = true;
               setEmployees(items || []);
             }
@@ -552,7 +609,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Attendance>('attendances', (items) => {
-            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.attendances)) {
+            if (!areCollectionsEqual(items || [], latestStateRef.current.attendances)) {
               isRemoteUpdateRef.current['attendances'] = true;
               setAttendances(items || []);
             }
@@ -561,7 +618,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<LoanAccount>('loanAccounts', (items) => {
-            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.loanAccounts)) {
+            if (!areCollectionsEqual(items || [], latestStateRef.current.loanAccounts)) {
               isRemoteUpdateRef.current['loanAccounts'] = true;
               setLoanAccounts(items || []);
             }
@@ -573,9 +630,19 @@ function AppContent() {
             if (items && items.length > 0) {
               const sorted = [...items].sort((a, b) => (b.isMainBranch ? 1 : 0) - (a.isMainBranch ? 1 : 0));
               setBranches(sorted);
-              try {
-                localStorage.setItem('nexova_branches_v2', JSON.stringify(sorted));
-              } catch (e) {}
+              if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+                (window as any).requestIdleCallback(() => {
+                  try {
+                    localStorage.setItem('nexova_branches_v2', JSON.stringify(sorted));
+                  } catch (e) {}
+                });
+              } else {
+                setTimeout(() => {
+                  try {
+                    localStorage.setItem('nexova_branches_v2', JSON.stringify(sorted));
+                  } catch (e) {}
+                }, 200);
+              }
             } else {
               const saved = localStorage.getItem('nexova_branches_v2');
               if (saved) {

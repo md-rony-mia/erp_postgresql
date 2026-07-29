@@ -1,4 +1,4 @@
-import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
+import { initializeApp, getApps, deleteApp, type FirebaseApp } from 'firebase/app';
 import { getFirestore, doc, setDoc, getDocs, collection, writeBatch, deleteDoc, onSnapshot, query, limit, type Unsubscribe, type Firestore } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, type User as FirebaseUser, type Auth } from 'firebase/auth';
 import { AppSettings } from '../types';
@@ -46,7 +46,7 @@ try {
 } catch (e) {
   console.error("[NEXOVA CRITICAL] Firestore initialization failed:", e);
 }
-export const db = firestoreInstance;
+export const db = firestoreInstance as unknown as Firestore;
 
 // Initialize Auth safely
 let authInstance: Auth | null = null;
@@ -57,7 +57,7 @@ try {
 } catch (e) {
   console.error("[NEXOVA CRITICAL] Firebase Auth initialization failed:", e);
 }
-export const auth = authInstance;
+export const auth = authInstance as unknown as Auth;
 
 export function signIn(email: string, password: string) {
   if (!isFirebaseConfigured || !auth) {
@@ -147,7 +147,7 @@ export async function createNewUserWithSecondaryApp(email: string, password: str
   } finally {
     // Always clean up secondary app
     try {
-      await secondaryApp.delete();
+      await deleteApp(secondaryApp);
     } catch (e) {
       // ignore cleanup errors
     }

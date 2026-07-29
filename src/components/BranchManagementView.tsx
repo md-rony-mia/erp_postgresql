@@ -301,6 +301,7 @@ export default function BranchManagementView({ currentUser, onBranchChange }: Br
   };
 
   const handleToggleStatus = async (b: Branch) => {
+    if (!db) return;
     if (b.isMainBranch && b.status === 'Active') {
       alert('প্রধান শাখা নিষ্ক্রিয় করা যাবে না!');
       return;

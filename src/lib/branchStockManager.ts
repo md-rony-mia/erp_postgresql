@@ -13,6 +13,7 @@ export async function updateBranchProductStock(
   productId: string,
   qtyChange: number
 ): Promise<number> {
+  if (!db) return 0;
   const stockDocId = `${branchId}_${productId}`;
   const stockRef = doc(db, 'branch_stocks', stockDocId);
 
@@ -52,6 +53,7 @@ export async function updateBranchProductStock(
  */
 export async function fetchBranchStocks(branchId: string): Promise<Record<string, number>> {
   const map: Record<string, number> = {};
+  if (!db) return map;
   try {
     const q = query(collection(db, 'branch_stocks'), where('branchId', '==', branchId));
     const snapshot = await getDocs(q);
