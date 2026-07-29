@@ -1,11 +1,11 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDocs, collection, writeBatch, deleteDoc, onSnapshot, type Unsubscribe, type Firestore } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDocs, collection, writeBatch, deleteDoc, onSnapshot, query, limit, type Unsubscribe, type Firestore } from 'firebase/firestore';
 import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, type User as FirebaseUser, type Auth } from 'firebase/auth';
 import { AppSettings } from '../types';
 
 export type { Unsubscribe };
 
-const rawApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
+const rawApiKey = import.meta.env.VITE_FIREBASE_API_KEY || "AIzaSyBuW_riXThjgxEciGOYoeUORji6lP_-F9A";
 
 export const isFirebaseConfigured = typeof rawApiKey === 'string' &&
   rawApiKey.trim().length > 0 &&
@@ -23,13 +23,13 @@ if (!isFirebaseConfigured) {
 }
 
 const firebaseConfig = {
-  apiKey: isFirebaseConfigured ? rawApiKey : undefined,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || undefined,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || undefined,
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || undefined,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || undefined,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || undefined,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || undefined,
+  apiKey: rawApiKey,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "gen-lang-client-0450547040",
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "gen-lang-client-0450547040.firebaseapp.com",
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "gen-lang-client-0450547040.firebasestorage.app",
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "1084420946916",
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:1084420946916:web:e473796d2be091d01425f1",
 };
 
 // Initialize Firebase safely
@@ -300,7 +300,8 @@ export async function fetchCollectionFromFirestore<T extends { id: string }>(col
  */
 export function subscribeToCollection<T extends { id: string }>(
   collectionName: string,
-  onUpdate: (items: T[]) => void
+  onUpdate: (items: T[]) => void,
+  maxItems: number = 500
 ): Unsubscribe {
   if (!isFirebaseConfigured || !db) {
     const stored = localStorage.getItem(`nexova_col_${collectionName}`);
@@ -313,8 +314,9 @@ export function subscribeToCollection<T extends { id: string }>(
   }
   try {
     const colRef = collection(db, collectionName);
+    const q = maxItems ? query(colRef, limit(maxItems)) : colRef;
     return onSnapshot(
-      colRef,
+      q,
       (querySnapshot) => {
         const items: T[] = [];
         querySnapshot.forEach((doc) => {

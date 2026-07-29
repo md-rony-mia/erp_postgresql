@@ -71,6 +71,58 @@ export function isDateInRange(
 }
 
 /**
+ * Helper to check if date falls in the prior comparison period
+ */
+export function isDateInPriorPeriod(dateStr: string, range: DateRangeType): boolean {
+  if (!dateStr) return false;
+  const itemDate = new Date(dateStr);
+  if (isNaN(itemDate.getTime())) return false;
+
+  const now = new Date();
+
+  switch (range) {
+    case 'today': {
+      const startOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+      const endOfYesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1, 23, 59, 59, 999);
+      return itemDate >= startOfYesterday && itemDate <= endOfYesterday;
+    }
+
+    case 'this_week': {
+      const day = now.getDay();
+      const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+      const startOfThisWeek = new Date(now.setDate(diff));
+      startOfThisWeek.setHours(0, 0, 0, 0);
+      const startOfLastWeek = new Date(startOfThisWeek);
+      startOfLastWeek.setDate(startOfLastWeek.getDate() - 7);
+      return itemDate >= startOfLastWeek && itemDate < startOfThisWeek;
+    }
+
+    case 'this_month': {
+      const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      return itemDate >= startOfLastMonth && itemDate < startOfThisMonth;
+    }
+
+    case 'ytd': {
+      const startOfThisYear = new Date(now.getFullYear(), 0, 1);
+      const startOfLastYear = new Date(now.getFullYear() - 1, 0, 1);
+      return itemDate >= startOfLastYear && itemDate < startOfThisYear;
+    }
+
+    case 'last_12_months': {
+      const past12Months = new Date();
+      past12Months.setFullYear(now.getFullYear() - 1);
+      const past24Months = new Date();
+      past24Months.setFullYear(now.getFullYear() - 2);
+      return itemDate >= past24Months && itemDate < past12Months;
+    }
+
+    default:
+      return false;
+  }
+}
+
+/**
  * Revenue Metrics Calculation
  */
 export function calculateRevenueMetrics(invoices: Invoice[], range: DateRangeType = 'ytd') {
@@ -99,14 +151,20 @@ export function calculateRevenueMetrics(invoices: Invoice[], range: DateRangeTyp
   });
 
   const filteredInvoices = invoices.filter((inv) => isDateInRange(inv.date, range));
+  const priorInvoices = invoices.filter((inv) => isDateInPriorPeriod(inv.date, range));
 
   const totalRevenueYTD = ytdInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const totalRevenueMTD = mtdInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const totalRevenueToday = todayInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
   const totalFilteredRevenue = filteredInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
+  const priorFilteredRevenue = priorInvoices.reduce((sum, inv) => sum + (inv.total || 0), 0);
 
-  // Growth calculation compared to previous period
-  const changePercent = 12.5; // Estimated positive trajectory for executive overview
+  let changePercent = 0;
+  if (priorFilteredRevenue > 0) {
+    changePercent = Number((((totalFilteredRevenue - priorFilteredRevenue) / priorFilteredRevenue) * 100).toFixed(1));
+  } else if (totalFilteredRevenue > 0) {
+    changePercent = 100;
+  }
 
   return {
     totalRevenueYTD,
@@ -129,6 +187,8 @@ export function calculateGrossProfitMargin(
   range: DateRangeType = 'ytd'
 ) {
   const filteredInvoices = invoices.filter((inv) => isDateInRange(inv.date, range));
+  const priorInvoices = invoices.filter((inv) => isDateInPriorPeriod(inv.date, range));
+
   const productCostMap = new Map<string, number>();
   products.forEach((p) => productCostMap.set(p.id, p.cost || 0));
 
@@ -139,8 +199,21 @@ export function calculateGrossProfitMargin(
     totalRevenue += inv.total || 0;
     if (inv.items && Array.isArray(inv.items)) {
       inv.items.forEach((item) => {
-        const itemCost = productCostMap.get(item.productId) || item.price * 0.7; // default 30% margin if cost missing
+        const itemCost = productCostMap.get(item.productId) ?? item.price * 0.7;
         totalCogs += itemCost * (item.quantity || 1);
+      });
+    }
+  });
+
+  let priorRevenue = 0;
+  let priorCogs = 0;
+
+  priorInvoices.forEach((inv) => {
+    priorRevenue += inv.total || 0;
+    if (inv.items && Array.isArray(inv.items)) {
+      inv.items.forEach((item) => {
+        const itemCost = productCostMap.get(item.productId) ?? item.price * 0.7;
+        priorCogs += itemCost * (item.quantity || 1);
       });
     }
   });
@@ -148,12 +221,22 @@ export function calculateGrossProfitMargin(
   const grossProfit = totalRevenue - totalCogs;
   const marginPercent = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
 
+  const priorGrossProfit = priorRevenue - priorCogs;
+  const priorMarginPercent = priorRevenue > 0 ? (priorGrossProfit / priorRevenue) * 100 : 0;
+
+  let changePercent = 0;
+  if (priorRevenue > 0) {
+    changePercent = Number((marginPercent - priorMarginPercent).toFixed(1));
+  } else if (totalRevenue > 0) {
+    changePercent = Number(marginPercent.toFixed(1));
+  }
+
   return {
     totalRevenue,
     totalCogs,
     grossProfit,
     marginPercent: Number(marginPercent.toFixed(1)),
-    changePercent: 3.2,
+    changePercent,
   };
 }
 
@@ -165,8 +248,11 @@ export function calculateGrossProfitMargin(
 export function calculateInventoryTurnover(invoices: Invoice[], products: Product[]) {
   const totalInventoryValue = products.reduce((sum, p) => sum + (p.stock || 0) * (p.cost || 0), 0);
 
+  const past12MonthsInvoices = invoices.filter((inv) => isDateInRange(inv.date, 'last_12_months'));
+  const prior12MonthsInvoices = invoices.filter((inv) => isDateInPriorPeriod(inv.date, 'last_12_months'));
+
   let annualCogs = 0;
-  invoices.forEach((inv) => {
+  past12MonthsInvoices.forEach((inv) => {
     if (inv.items && Array.isArray(inv.items)) {
       inv.items.forEach((item) => {
         const product = products.find((p) => p.id === item.productId);
@@ -176,27 +262,60 @@ export function calculateInventoryTurnover(invoices: Invoice[], products: Produc
     }
   });
 
+  let priorAnnualCogs = 0;
+  prior12MonthsInvoices.forEach((inv) => {
+    if (inv.items && Array.isArray(inv.items)) {
+      inv.items.forEach((item) => {
+        const product = products.find((p) => p.id === item.productId);
+        const cost = product ? product.cost : item.price * 0.7;
+        priorAnnualCogs += cost * (item.quantity || 1);
+      });
+    }
+  });
+
   const turnoverRatio = totalInventoryValue > 0 ? annualCogs / totalInventoryValue : 0;
+  const priorTurnoverRatio = totalInventoryValue > 0 ? priorAnnualCogs / totalInventoryValue : 0;
+
+  let changePercent = 0;
+  if (priorTurnoverRatio > 0) {
+    changePercent = Number((((turnoverRatio - priorTurnoverRatio) / priorTurnoverRatio) * 100).toFixed(1));
+  } else if (turnoverRatio > 0) {
+    changePercent = 100;
+  }
 
   return {
     turnoverRatio: Number(turnoverRatio.toFixed(2)),
     totalInventoryValue,
     annualCogs,
-    changePercent: 1.8,
+    changePercent,
   };
 }
 
 /**
  * Cash Position Calculation
  */
-export function calculateCashPosition(bankAccounts: BankAccount[]) {
+export function calculateCashPosition(bankAccounts: BankAccount[], transactions: Transaction[] = []) {
   const totalCash = bankAccounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
   const liquidAccounts = bankAccounts.length;
+
+  let changePercent = 0;
+  if (transactions.length > 0) {
+    const past30DaysTx = transactions.filter((tx) => isDateInRange(tx.date, 'this_month'));
+    const netChange = past30DaysTx.reduce((sum, tx) => {
+      if (tx.type === 'Income' || tx.type === 'Deposit') return sum + (tx.amount || 0);
+      if (tx.type === 'Expense' || tx.type === 'Withdrawal') return sum - (tx.amount || 0);
+      return sum;
+    }, 0);
+    const priorCash = totalCash - netChange;
+    if (priorCash > 0) {
+      changePercent = Number((((totalCash - priorCash) / priorCash) * 100).toFixed(1));
+    }
+  }
 
   return {
     totalCash,
     liquidAccounts,
-    changePercent: 5.4,
+    changePercent,
   };
 }
 
@@ -206,13 +325,27 @@ export function calculateCashPosition(bankAccounts: BankAccount[]) {
 export function calculateCustomerMetrics(customers: Customer[], invoices: Invoice[]) {
   const totalCustomers = customers.length;
   const customerPaidIds = new Set(invoices.filter((inv) => inv.isPaid).map((inv) => inv.customerId));
-  const activeCustomersCount = customerPaidIds.size || Math.min(totalCustomers, 8);
+  const activeCustomersCount = customerPaidIds.size;
+
+  const now = new Date();
+  const startOfThisMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const priorCustomersCount = customers.filter((c) => {
+    if (!(c as any).createdAt) return true;
+    const d = new Date((c as any).createdAt);
+    return !isNaN(d.getTime()) && d < startOfThisMonth;
+  }).length;
+
+  let changePercent = 0;
+  if (priorCustomersCount > 0 && priorCustomersCount < totalCustomers) {
+    changePercent = Number((((totalCustomers - priorCustomersCount) / priorCustomersCount) * 100).toFixed(1));
+  }
 
   return {
     totalCustomers,
     activeCustomersCount,
     activeRatio: totalCustomers > 0 ? Number(((activeCustomersCount / totalCustomers) * 100).toFixed(0)) : 0,
-    changePercent: 8.1,
+    changePercent,
   };
 }
 
@@ -257,6 +390,7 @@ export function getRevenueTrendData(invoices: Invoice[], range: DateRangeType = 
     const label = `${mName} '${yr}`;
 
     let rev = 0;
+    let cogs = 0;
     let invCount = 0;
 
     invoices.forEach((inv) => {
@@ -268,20 +402,21 @@ export function getRevenueTrendData(invoices: Invoice[], range: DateRangeType = 
       ) {
         rev += inv.total || 0;
         invCount++;
+        if (inv.items && Array.isArray(inv.items)) {
+          inv.items.forEach((item) => {
+            cogs += ((item as any).cost || item.price * 0.7) * (item.quantity || 1);
+          });
+        } else {
+          cogs += (inv.total || 0) * 0.7;
+        }
       }
     });
-
-    // If invoices dataset is sparse, provide sensible smooth historical progression
-    if (rev === 0 && i > 0) {
-      const baseRev = invoices.reduce((s, x) => s + x.total, 0) || 120000;
-      rev = Math.round((baseRev / 12) * (0.8 + Math.sin(i) * 0.3));
-    }
 
     monthlyData.push({
       name: label,
       Revenue: Math.round(rev),
-      Profit: Math.round(rev * 0.32),
-      Invoices: invCount || Math.floor(rev / 5000),
+      Profit: Math.round(rev - cogs),
+      Invoices: invCount,
     });
   }
 
@@ -293,6 +428,7 @@ export function getRevenueTrendData(invoices: Invoice[], range: DateRangeType = 
  */
 export function getSalesByCategoryData(invoices: Invoice[], products: Product[]) {
   const categoryMap: Record<string, number> = {};
+  const categoryItemCountMap: Record<string, number> = {};
   const productCatMap = new Map<string, string>();
 
   products.forEach((p) => productCatMap.set(p.id, p.category || 'General'));
@@ -300,8 +436,10 @@ export function getSalesByCategoryData(invoices: Invoice[], products: Product[])
   invoices.forEach((inv) => {
     if (inv.items && Array.isArray(inv.items)) {
       inv.items.forEach((item) => {
-        const cat = productCatMap.get(item.productId) || 'Electronics';
-        categoryMap[cat] = (categoryMap[cat] || 0) + (item.subtotal || item.price * item.quantity);
+        const cat = productCatMap.get(item.productId) || 'General';
+        const itemTotal = item.subtotal || (item.price || 0) * (item.quantity || 1);
+        categoryMap[cat] = (categoryMap[cat] || 0) + itemTotal;
+        categoryItemCountMap[cat] = (categoryItemCountMap[cat] || 0) + (item.quantity || 1);
       });
     } else {
       categoryMap['General'] = (categoryMap['General'] || 0) + (inv.total || 0);
@@ -310,25 +448,25 @@ export function getSalesByCategoryData(invoices: Invoice[], products: Product[])
 
   const categories = Object.keys(categoryMap);
   if (categories.length === 0) {
-    return [
-      { category: 'Electronics', sales: 45000, itemsCount: 120 },
-      { category: 'Hardware', sales: 32000, itemsCount: 85 },
-      { category: 'Accessories', sales: 21000, itemsCount: 210 },
-      { category: 'Office Supplies', sales: 15000, itemsCount: 95 },
-    ];
+    return [];
   }
 
   return categories.map((cat) => ({
     category: cat,
     sales: Math.round(categoryMap[cat]),
-    itemsCount: Math.round(categoryMap[cat] / 250),
+    itemsCount: Math.round(categoryItemCountMap[cat] || 0),
   }));
 }
 
 /**
  * Accounts Receivable (AR) vs Accounts Payable (AP) Aging Breakdown
  */
-export function getARvsAPData(customers: Customer[], suppliers: Supplier[], invoices: Invoice[]) {
+export function getARvsAPData(
+  customers: Customer[],
+  suppliers: Supplier[],
+  invoices: Invoice[],
+  purchaseOrders: PurchaseOrder[] = []
+) {
   const arBuckets = { current: 0, days30: 0, days60: 0, days90: 0 };
   const apBuckets = { current: 0, days30: 0, days60: 0, days90: 0 };
 
@@ -339,28 +477,35 @@ export function getARvsAPData(customers: Customer[], suppliers: Supplier[], invo
       const invDate = new Date(inv.date).getTime();
       const diffDays = Math.floor((now - invDate) / (1000 * 60 * 60 * 24));
 
-      if (diffDays <= 30) arBuckets.current += inv.total;
-      else if (diffDays <= 60) arBuckets.days30 += inv.total;
-      else if (diffDays <= 90) arBuckets.days60 += inv.total;
-      else arBuckets.days90 += inv.total;
+      if (diffDays <= 30) arBuckets.current += inv.total || 0;
+      else if (diffDays <= 60) arBuckets.days30 += inv.total || 0;
+      else if (diffDays <= 90) arBuckets.days60 += inv.total || 0;
+      else arBuckets.days90 += inv.total || 0;
     }
   });
 
-  const totalAR = customers.reduce((sum, c) => sum + (c.outstandingBalance || 0), 0);
-  const totalAP = suppliers.reduce((sum, s) => sum + (s.outstandingBalance || 0), 0);
+  purchaseOrders.forEach((po) => {
+    if ((po.status as string) === 'Pending' || (po.status as string) === 'Approved' || (po.status as string) === 'Sent' || po.status === 'Ordered') {
+      const poDate = new Date(po.date).getTime();
+      const diffDays = Math.floor((now - poDate) / (1000 * 60 * 60 * 24));
 
-  if (arBuckets.current + arBuckets.days30 + arBuckets.days60 + arBuckets.days90 === 0 && totalAR > 0) {
-    arBuckets.current = totalAR * 0.5;
-    arBuckets.days30 = totalAR * 0.3;
-    arBuckets.days60 = totalAR * 0.15;
-    arBuckets.days90 = totalAR * 0.05;
+      if (diffDays <= 30) apBuckets.current += po.total || 0;
+      else if (diffDays <= 60) apBuckets.days30 += po.total || 0;
+      else if (diffDays <= 90) apBuckets.days60 += po.total || 0;
+      else apBuckets.days90 += po.total || 0;
+    }
+  });
+
+  const unpaidInvoiceSum = Object.values(arBuckets).reduce((s, x) => s + x, 0);
+  const totalAR = customers.reduce((sum, c) => sum + (c.outstandingBalance || 0), 0);
+  if (totalAR > unpaidInvoiceSum) {
+    arBuckets.current += (totalAR - unpaidInvoiceSum);
   }
 
-  if (totalAP > 0) {
-    apBuckets.current = totalAP * 0.55;
-    apBuckets.days30 = totalAP * 0.25;
-    apBuckets.days60 = totalAP * 0.12;
-    apBuckets.days90 = totalAP * 0.08;
+  const unpaidPOSum = Object.values(apBuckets).reduce((s, x) => s + x, 0);
+  const totalAP = suppliers.reduce((sum, s) => sum + (s.outstandingBalance || 0), 0);
+  if (totalAP > unpaidPOSum) {
+    apBuckets.current += (totalAP - unpaidPOSum);
   }
 
   return [
@@ -424,7 +569,8 @@ export function getAlertsData(
   customers: Customer[],
   suppliers: Supplier[],
   loanAccounts: LoanAccount[],
-  employees: Employee[]
+  employees: Employee[],
+  purchaseOrders: PurchaseOrder[] = []
 ): ExecutiveAlertItem[] {
   const alerts: ExecutiveAlertItem[] = [];
 
@@ -490,17 +636,20 @@ export function getAlertsData(
     });
   }
 
-  // Pending approval workflow instances
-  alerts.push({
-    id: 'alert-workflow',
-    title: `4 Pending Requisition & PO Approvals`,
-    description: `Requires executive signature authorization before purchase dispatch.`,
-    severity: 'warning',
-    category: 'workflow',
-    moduleTab: 'workflow',
-    moduleSubTab: 'designer',
-    metricBadge: `4 Approvals`,
-  });
+  // Real Pending approval workflow instances
+  const pendingApprovals = purchaseOrders.filter((po) => (po.status as string) === 'Pending' || (po.status as string) === 'Pending Approval' || po.status === 'Ordered');
+  if (pendingApprovals.length > 0) {
+    alerts.push({
+      id: 'alert-workflow',
+      title: `${pendingApprovals.length} Pending Requisition & PO Approvals`,
+      description: `Requires executive signature authorization before purchase dispatch.`,
+      severity: 'warning',
+      category: 'workflow',
+      moduleTab: 'workflow',
+      moduleSubTab: 'designer',
+      metricBadge: `${pendingApprovals.length} Approvals`,
+    });
+  }
 
   return alerts;
 }

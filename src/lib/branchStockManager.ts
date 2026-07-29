@@ -1,5 +1,5 @@
 import { db } from './firebase';
-import { doc, getDoc, setDoc, updateDoc, increment, collection, getDocs, query, where } from 'firebase/firestore';
+import { doc, runTransaction, collection, getDocs, query, where } from 'firebase/firestore';
 import { BranchStock } from '../types';
 
 /**
@@ -17,27 +17,30 @@ export async function updateBranchProductStock(
   const stockRef = doc(db, 'branch_stocks', stockDocId);
 
   try {
-    const snap = await getDoc(stockRef);
-    if (snap.exists()) {
-      const current = snap.data() as BranchStock;
-      const newQty = Math.max(0, (current.stock || 0) + qtyChange);
-      await updateDoc(stockRef, {
-        stock: newQty,
-        lastUpdated: new Date().toISOString(),
-      });
-      return newQty;
-    } else {
-      const initialStock = Math.max(0, qtyChange);
-      const newDoc: BranchStock = {
-        id: stockDocId,
-        branchId,
-        productId,
-        stock: initialStock,
-        lastUpdated: new Date().toISOString(),
-      };
-      await setDoc(stockRef, newDoc);
-      return initialStock;
-    }
+    const finalQty = (await runTransaction(db, async (transaction) => {
+      const snap = await transaction.get(stockRef);
+      if (snap.exists()) {
+        const current = snap.data() as BranchStock;
+        const newQty = Math.max(0, (current.stock || 0) + qtyChange);
+        transaction.update(stockRef, {
+          stock: newQty,
+          lastUpdated: new Date().toISOString(),
+        });
+        return newQty;
+      } else {
+        const initialStock = Math.max(0, qtyChange);
+        const newDoc: BranchStock = {
+          id: stockDocId,
+          branchId,
+          productId,
+          stock: initialStock,
+          lastUpdated: new Date().toISOString(),
+        };
+        transaction.set(stockRef, newDoc);
+        return initialStock;
+      }
+    })) as number;
+    return finalQty;
   } catch (err) {
     console.error(`Error updating branch stock for ${stockDocId}:`, err);
     return 0;

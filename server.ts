@@ -13,7 +13,9 @@ const app = express();
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
 // Security middleware
+
 app.use(helmet({
+  frameguard: false,
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
@@ -21,6 +23,7 @@ app.use(helmet({
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", "data:", "blob:"],
       connectSrc: ["'self'", "https://firestore.googleapis.com", "https://identitytoolkit.googleapis.com"],
+      frameAncestors: ["'self'", "https://*.run.app", "https://aistudio.google.com"],
     },
   },
 }));
