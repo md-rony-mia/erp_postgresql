@@ -21,7 +21,6 @@ const mockOnSnapshot: any = vi.fn();
 
 const mockBatch = {
   set: vi.fn(),
-  delete: vi.fn(),
   commit: vi.fn().mockResolvedValue(undefined),
 };
 const mockWriteBatch = vi.fn(() => mockBatch);
@@ -45,8 +44,6 @@ vi.mock('firebase/firestore', () => ({
   deleteDoc: (a?: any) => mockDeleteDoc(a),
   writeBatch: () => mockWriteBatch(),
   onSnapshot: (a?: any, b?: any, c?: any) => mockOnSnapshot(a, b, c),
-  query: (col: any) => col,
-  limit: (n: any) => n,
 }));
 
 vi.mock('firebase/auth', () => ({
@@ -89,11 +86,7 @@ describe('Firestore Helper Functions', () => {
       await saveDocToFirestore('products', data);
 
       expect(mockDoc).toHaveBeenCalledWith(expect.any(Object), 'products', 'prod1');
-      expect(mockSetDoc).toHaveBeenCalledWith(
-        { collection: 'products', id: 'prod1' },
-        expect.objectContaining({ id: 'prod1', name: 'Product 1', updatedAt: expect.any(String), updatedBy: 'test-uid' }),
-        { merge: true }
-      );
+      expect(mockSetDoc).toHaveBeenCalledWith({ collection: 'products', id: 'prod1' }, data);
     });
 
     it('should handle setDoc errors gracefully with fallback', async () => {
@@ -142,6 +135,8 @@ describe('Firestore Helper Functions', () => {
         forEach: (callback: any) => mockDocs.forEach((doc) => callback(doc)),
       };
       mockGetDocs.mockResolvedValueOnce(mockQuerySnapshot);
+      mockSetDoc.mockResolvedValue(undefined);
+      mockDeleteDoc.mockResolvedValue(undefined);
 
       const currentItems = [
         { id: 'item-stay', name: 'Stay Item Updated' },
@@ -151,18 +146,9 @@ describe('Firestore Helper Functions', () => {
       await syncCollectionToFirestore('products', currentItems);
 
       expect(mockGetDocs).toHaveBeenCalled();
-      expect(mockBatch.set).toHaveBeenCalledWith(
-        { collection: 'products', id: 'item-stay' },
-        expect.objectContaining({ id: 'item-stay', name: 'Stay Item Updated' }),
-        { merge: true }
-      );
-      expect(mockBatch.set).toHaveBeenCalledWith(
-        { collection: 'products', id: 'item-new' },
-        expect.objectContaining({ id: 'item-new', name: 'New Item' }),
-        { merge: true }
-      );
-      expect(mockBatch.delete).toHaveBeenCalledWith({ collection: 'products', id: 'item-old' });
-      expect(mockBatch.commit).toHaveBeenCalled();
+      expect(mockSetDoc).toHaveBeenCalledWith({ collection: 'products', id: 'item-stay' }, { id: 'item-stay', name: 'Stay Item Updated' });
+      expect(mockSetDoc).toHaveBeenCalledWith({ collection: 'products', id: 'item-new' }, { id: 'item-new', name: 'New Item' });
+      expect(mockDeleteDoc).toHaveBeenCalledWith({ collection: 'products', id: 'item-old' });
     });
   });
 

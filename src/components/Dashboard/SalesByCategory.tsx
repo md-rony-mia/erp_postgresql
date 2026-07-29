@@ -64,36 +64,32 @@ export const SalesByCategory: React.FC<SalesByCategoryProps> = React.memo(({ dat
         </div>
       </div>
 
-      <div className="h-[280px] w-full pt-2 flex items-center justify-center">
-        {data.length === 0 ? (
-          <p className="text-slate-500 text-xs font-medium">Not enough data yet</p>
-        ) : (
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={data} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
-              <XAxis
-                dataKey="category"
-                stroke="#64748b"
-                fontSize={11}
-                tickLine={false}
-                axisLine={false}
-              />
-              <YAxis
-                stroke="#64748b"
-                fontSize={10}
-                tickLine={false}
-                axisLine={false}
-                tickFormatter={(val) => `৳${(val / 1000).toFixed(0)}k`}
-              />
-              <RechartsTooltip content={<CustomTooltip />} />
-              <Bar dataKey="sales" radius={[6, 6, 0, 0]}>
-                {data.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        )}
+      <div className="h-[280px] w-full pt-2">
+        <ResponsiveContainer width="100%" height="100%">
+          <BarChart data={data} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" vertical={false} />
+            <XAxis
+              dataKey="category"
+              stroke="#64748b"
+              fontSize={11}
+              tickLine={false}
+              axisLine={false}
+            />
+            <YAxis
+              stroke="#64748b"
+              fontSize={10}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={(val) => `৳${(val / 1000).toFixed(0)}k`}
+            />
+            <RechartsTooltip content={<CustomTooltip />} />
+            <Bar dataKey="sales" radius={[6, 6, 0, 0]}>
+              {data.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={BAR_COLORS[index % BAR_COLORS.length]} />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
       </div>
     </div>
   );
