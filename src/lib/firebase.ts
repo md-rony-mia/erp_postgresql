@@ -1,6 +1,6 @@
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDocs, collection, writeBatch, deleteDoc, onSnapshot, Unsubscribe } from 'firebase/firestore';
-import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, User as FirebaseUser } from 'firebase/auth';
+import { initializeApp, getApps, type FirebaseApp } from 'firebase/app';
+import { getFirestore, doc, setDoc, getDocs, collection, writeBatch, deleteDoc, onSnapshot, type Unsubscribe, type Firestore } from 'firebase/firestore';
+import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged, createUserWithEmailAndPassword, type User as FirebaseUser, type Auth } from 'firebase/auth';
 import { AppSettings } from '../types';
 
 export type { Unsubscribe };
@@ -9,44 +9,58 @@ const rawApiKey = import.meta.env.VITE_FIREBASE_API_KEY;
 
 export const isFirebaseConfigured = typeof rawApiKey === 'string' &&
   rawApiKey.trim().length > 0 &&
-  !rawApiKey.includes('MY_FIREBASE_API_KEY');
+  !rawApiKey.includes('MY_FIREBASE_API_KEY') &&
+  !rawApiKey.includes('dummy') &&
+  !rawApiKey.includes('placeholder');
+
+if (!isFirebaseConfigured) {
+  console.warn(
+    '[NEXOVA SECURITY] Firebase is NOT configured. ' +
+    'The application will run in LOCAL-ONLY demo mode. ' +
+    'Data will NOT persist to the cloud. ' +
+    'Set VITE_FIREBASE_API_KEY and related env vars to enable cloud sync.'
+  );
+}
 
 const firebaseConfig = {
-  apiKey: isFirebaseConfigured ? rawApiKey : 'AIzaSyDummyKeyForLocalDevelopmentOnly1234',
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'demo-project',
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || 'demo-project.firebaseapp.com',
-  firestoreDatabaseId: import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || '',
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '',
-  appId: import.meta.env.VITE_FIREBASE_APP_ID || '',
+  apiKey: isFirebaseConfigured ? rawApiKey : undefined,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || undefined,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || undefined,
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || undefined,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || undefined,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || undefined,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID || undefined,
 };
 
 // Initialize Firebase safely
 const apps = getApps();
-const app = apps.length > 0 ? apps[0] : initializeApp(firebaseConfig);
+const app: FirebaseApp = apps.length > 0 ? apps[0] : initializeApp(firebaseConfig);
 
 // Initialize Firestore with custom databaseId safely
-let firestoreInstance: ReturnType<typeof getFirestore>;
+let firestoreInstance: Firestore | null = null;
 try {
-  firestoreInstance = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+  if (isFirebaseConfigured) {
+    const dbId = import.meta.env.VITE_FIREBASE_FIRESTORE_DATABASE_ID;
+    firestoreInstance = dbId ? getFirestore(app, dbId) : getFirestore(app);
+  }
 } catch (e) {
-  console.warn("Firestore initialization notice:", e);
-  firestoreInstance = {} as any;
+  console.error("[NEXOVA CRITICAL] Firestore initialization failed:", e);
 }
 export const db = firestoreInstance;
 
 // Initialize Auth safely
-let authInstance: ReturnType<typeof getAuth>;
+let authInstance: Auth | null = null;
 try {
-  authInstance = getAuth(app);
+  if (isFirebaseConfigured) {
+    authInstance = getAuth(app);
+  }
 } catch (e) {
-  console.warn("Firebase Auth initialization notice:", e);
-  authInstance = { currentUser: null } as any;
+  console.error("[NEXOVA CRITICAL] Firebase Auth initialization failed:", e);
 }
 export const auth = authInstance;
 
 export function signIn(email: string, password: string) {
-  if (!isFirebaseConfigured) {
+  if (!isFirebaseConfigured || !auth) {
     const mockUid = 'demo-user-' + (email ? Math.abs(email.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)) : '1');
     return Promise.resolve({
       user: {
@@ -61,19 +75,16 @@ export function signIn(email: string, password: string) {
 }
 
 export function signOutUser() {
-  if (!isFirebaseConfigured) {
+  if (!isFirebaseConfigured || !auth) {
     return Promise.resolve();
   }
-  try {
-    return signOut(auth);
-  } catch (err) {
+  return signOut(auth).catch((err) => {
     console.warn("Sign out warning:", err);
-    return Promise.resolve();
-  }
+  });
 }
 
 export function onAuthStateChange(callback: (user: FirebaseUser | null) => void) {
-  if (!isFirebaseConfigured) {
+  if (!isFirebaseConfigured || !auth) {
     const stored = localStorage.getItem('nexova_current_user');
     if (stored) {
       try {
@@ -91,59 +102,56 @@ export function onAuthStateChange(callback: (user: FirebaseUser | null) => void)
     }
     return () => {};
   }
-  try {
-    return onAuthStateChanged(
-      auth,
-      (user) => callback(user),
-      (error) => {
-        console.warn("Firebase auth state change error:", error);
-        callback(null);
-      }
-    );
-  } catch (err) {
-    console.warn("Firebase auth subscription failed:", err);
-    callback(null);
-    return () => {};
-  }
+  return onAuthStateChanged(
+    auth,
+    (user) => callback(user),
+    (error) => {
+      console.warn("Firebase auth state change error:", error);
+      callback(null);
+    }
+  );
 }
 
 export async function createNewUserWithSecondaryApp(email: string, password: string, name: string, role: string, username: string) {
-  if (!isFirebaseConfigured) {
+  if (!isFirebaseConfigured || !auth || !db) {
     const mockUid = 'user-' + Date.now();
     return { uid: mockUid, email, name, role };
   }
-  let secondaryApp;
-  const secondaryAppName = "SecondaryAppForUserCreation";
-  const existingApps = getApps();
-  const existingApp = existingApps.find(a => a.name === secondaryAppName);
-  if (existingApp) {
-    secondaryApp = existingApp;
-  } else {
-    secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
-  }
+  let secondaryApp: FirebaseApp;
+  const secondaryAppName = "SecondaryAppForUserCreation_" + Date.now();
 
+  secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
   const secondaryAuth = getAuth(secondaryApp);
-  
-  // Create user
-  const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
-  const newUser = userCredential.user;
-  const uid = newUser.uid;
 
-  // Immediately sign out secondary auth so it doesn't leave active sessions
-  await signOut(secondaryAuth);
+  try {
+    const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
+    const newUser = userCredential.user;
+    const uid = newUser.uid;
 
-  // Now create the Firestore document /users/{uid} using the primary db instance
-  const userDocRef = doc(db, 'users', uid);
-  await setDoc(userDocRef, {
-    uid: uid,
-    name: name,
-    email: email,
-    role: role,
-    status: 'Active',
-    username: username.toLowerCase().replace(/\s/g, '_'),
-  });
+    await signOut(secondaryAuth);
 
-  return { uid, email, name, role };
+    const userDocRef = doc(db, 'users', uid);
+    await setDoc(userDocRef, {
+      uid: uid,
+      name: name,
+      email: email,
+      role: role,
+      status: 'Active',
+      username: username.toLowerCase().replace(/\s/g, '_'),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: auth.currentUser?.uid || 'system',
+    });
+
+    return { uid, email, name, role };
+  } finally {
+    // Always clean up secondary app
+    try {
+      await secondaryApp.delete();
+    } catch (e) {
+      // ignore cleanup errors
+    }
+  }
 }
 
 export enum OperationType {
@@ -159,16 +167,22 @@ export interface FirestoreErrorInfo {
   error: string;
   operationType: OperationType;
   path: string | null;
+  timestamp: string;
   authInfo: {
     userId?: string | null;
     email?: string | null;
     emailVerified?: boolean | null;
     isAnonymous?: boolean | null;
     tenantId?: string | null;
-    providerInfo?: {
-      providerId?: string | null;
-      email?: string | null;
-    }[];
+  }
+}
+
+export class NexovaFirestoreError extends Error {
+  public info: FirestoreErrorInfo;
+  constructor(info: FirestoreErrorInfo) {
+    super(info.error);
+    this.name = 'NexovaFirestoreError';
+    this.info = info;
   }
 }
 
@@ -176,44 +190,48 @@ export function handleFirestoreError(error: unknown, operationType: OperationTyp
   const errInfo: FirestoreErrorInfo = {
     error: error instanceof Error ? error.message : String(error),
     authInfo: {
-      userId: auth.currentUser?.uid || null,
-      email: auth.currentUser?.email || null,
-      emailVerified: auth.currentUser?.emailVerified || null,
-      isAnonymous: auth.currentUser?.isAnonymous || null,
-      tenantId: auth.currentUser?.tenantId || null,
-      providerInfo: auth.currentUser?.providerData?.map(provider => ({
-        providerId: provider.providerId,
-        email: provider.email,
-      })) || []
+      userId: auth?.currentUser?.uid || null,
+      email: auth?.currentUser?.email || null,
+      emailVerified: auth?.currentUser?.emailVerified || null,
+      isAnonymous: auth?.currentUser?.isAnonymous || null,
+      tenantId: auth?.currentUser?.tenantId || null,
     },
     operationType,
-    path
+    path,
+    timestamp: new Date().toISOString(),
   };
-  // Intentionally silent: re-thrown immediately so caller catch blocks/UIs handle it
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+  console.error('[NexovaFirestoreError]', JSON.stringify(errInfo));
+  throw new NexovaFirestoreError(errInfo);
 }
 
 /**
- * Saves a single document to a collection in Firestore
+ * Saves a single document to a collection in Firestore with audit fields
  */
 export async function saveDocToFirestore<T extends { id: string }>(
   collectionName: string,
   data: T
 ) {
-  if (!isFirebaseConfigured) {
+  const enrichedData = {
+    ...data,
+    updatedAt: new Date().toISOString(),
+    updatedBy: auth?.currentUser?.uid || 'system',
+  };
+
+  if (!isFirebaseConfigured || !db) {
     try {
-      localStorage.setItem(`nexova_doc_${collectionName}_${data.id}`, JSON.stringify(data));
-    } catch (e) {}
+      localStorage.setItem(`nexova_doc_${collectionName}_${data.id}`, JSON.stringify(enrichedData));
+    } catch (e) {
+      console.warn('localStorage save failed:', e);
+    }
     return;
   }
   try {
     const docRef = doc(db, collectionName, data.id);
-    await setDoc(docRef, data);
+    await setDoc(docRef, enrichedData, { merge: true });
   } catch (error) {
     console.warn(`Firestore saveDoc error for [${collectionName}/${data.id}]:`, error);
     try {
-      localStorage.setItem(`nexova_doc_${collectionName}_${data.id}`, JSON.stringify(data));
+      localStorage.setItem(`nexova_doc_${collectionName}_${data.id}`, JSON.stringify(enrichedData));
     } catch (e) {}
   }
 }
@@ -222,19 +240,25 @@ export async function saveDocToFirestore<T extends { id: string }>(
  * Saves settings to a single document 'app' in settings collection
  */
 export async function saveSettingsToFirestore(settings: AppSettings) {
-  if (!isFirebaseConfigured) {
+  const enrichedSettings = {
+    ...settings,
+    updatedAt: new Date().toISOString(),
+    updatedBy: auth?.currentUser?.uid || 'system',
+  };
+
+  if (!isFirebaseConfigured || !db) {
     try {
-      localStorage.setItem('nexova_app_settings', JSON.stringify(settings));
+      localStorage.setItem('nexova_app_settings', JSON.stringify(enrichedSettings));
     } catch (e) {}
     return;
   }
   try {
     const docRef = doc(db, 'settings', 'app');
-    await setDoc(docRef, settings);
+    await setDoc(docRef, enrichedSettings, { merge: true });
   } catch (error) {
     console.warn('Firestore saveSettings error:', error);
     try {
-      localStorage.setItem('nexova_app_settings', JSON.stringify(settings));
+      localStorage.setItem('nexova_app_settings', JSON.stringify(enrichedSettings));
     } catch (e) {}
   }
 }
@@ -242,8 +266,8 @@ export async function saveSettingsToFirestore(settings: AppSettings) {
 /**
  * Fetches all documents from a collection
  */
-export async function fetchCollectionFromFirestore<T>(collectionName: string): Promise<T[]> {
-  if (!isFirebaseConfigured) {
+export async function fetchCollectionFromFirestore<T extends { id: string }>(collectionName: string): Promise<T[]> {
+  if (!isFirebaseConfigured || !db) {
     const stored = localStorage.getItem(`nexova_col_${collectionName}`);
     if (stored) {
       try {
@@ -274,11 +298,11 @@ export async function fetchCollectionFromFirestore<T>(collectionName: string): P
 /**
  * Subscribes to real-time updates for a collection in Firestore
  */
-export function subscribeToCollection<T>(
+export function subscribeToCollection<T extends { id: string }>(
   collectionName: string,
   onUpdate: (items: T[]) => void
 ): Unsubscribe {
-  if (!isFirebaseConfigured) {
+  if (!isFirebaseConfigured || !db) {
     const stored = localStorage.getItem(`nexova_col_${collectionName}`);
     if (stored) {
       try {
@@ -321,7 +345,7 @@ export async function seedCollectionIfEmpty<T extends { id: string }>(
   collectionName: string,
   initialData: T[]
 ): Promise<T[]> {
-  if (!isFirebaseConfigured) {
+  if (!isFirebaseConfigured || !db) {
     const stored = localStorage.getItem(`nexova_col_${collectionName}`);
     if (stored) {
       try {
@@ -340,11 +364,18 @@ export async function seedCollectionIfEmpty<T extends { id: string }>(
       return existing;
     }
 
-    // Collection is empty, seed it
+    // Collection is empty, seed it using batch for atomicity
     const batch = writeBatch(db);
+    const now = new Date().toISOString();
     initialData.forEach((item) => {
       const docRef = doc(db, collectionName, item.id);
-      batch.set(docRef, item);
+      batch.set(docRef, {
+        ...item,
+        createdAt: now,
+        updatedAt: now,
+        createdBy: 'system_seed',
+        updatedBy: 'system_seed',
+      });
     });
     await batch.commit();
     return initialData;
@@ -358,7 +389,8 @@ export async function seedCollectionIfEmpty<T extends { id: string }>(
 }
 
 /**
- * Synchronizes an array of items with a Firestore collection, adding/updating active items and deleting inactive ones
+ * Synchronizes an array of items with a Firestore collection atomically.
+ * Uses writeBatch for all mutations to ensure consistency.
  */
 export async function syncCollectionToFirestore<T extends { id: string }>(
   collectionName: string,
@@ -368,32 +400,40 @@ export async function syncCollectionToFirestore<T extends { id: string }>(
     localStorage.setItem(`nexova_col_${collectionName}`, JSON.stringify(currentItems));
   } catch (e) {}
 
-  if (!isFirebaseConfigured) {
+  if (!isFirebaseConfigured || !db) {
     return;
   }
 
   try {
-    // 1. Fetch current IDs in Firestore
     const querySnapshot = await getDocs(collection(db, collectionName));
     const firestoreIds = new Set<string>();
     querySnapshot.forEach((doc) => {
       firestoreIds.add(doc.id);
     });
 
-    // 2. Save/update all current items
+    const batch = writeBatch(db);
+    const now = new Date().toISOString();
+    const userId = auth?.currentUser?.uid || 'system';
+
+    // Save/update all current items
     for (const item of currentItems) {
       const docRef = doc(db, collectionName, item.id);
-      await setDoc(docRef, item);
+      batch.set(docRef, {
+        ...item,
+        updatedAt: now,
+        updatedBy: userId,
+      }, { merge: true });
       firestoreIds.delete(item.id);
     }
 
-    // 3. Any leftover IDs in firestoreIds are deleted (since they are no longer in our list!)
+    // Delete items no longer in the list
     for (const idToDelete of firestoreIds) {
       const docRef = doc(db, collectionName, idToDelete);
-      await deleteDoc(docRef);
+      batch.delete(docRef);
     }
+
+    await batch.commit();
   } catch (error) {
     console.warn(`Firestore sync error for [${collectionName}]:`, error);
   }
 }
-
