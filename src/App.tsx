@@ -24,28 +24,28 @@ const lazyWithRetry = (factory: () => Promise<any>) =>
     }
   });
 
-// Lazy load per-module view components to support optimal bundle size split
+// Lazy load large per-module view components (>2000 lines) to support optimal bundle size split
 const InventoryView = lazyWithRetry(() => import('./components/InventoryView'));
 const SalesView = lazyWithRetry(() => import('./components/SalesView'));
 const PurchaseView = lazyWithRetry(() => import('./components/PurchaseView'));
 const EmployeeView = lazyWithRetry(() => import('./components/EmployeeView'));
 const BankingAndLoanView = lazyWithRetry(() => import('./components/BankingAndLoanView'));
 const ReportsView = lazyWithRetry(() => import('./components/ReportsView'));
-const AccountingView = lazyWithRetry(() => import('./components/AccountingView'));
-const GridReportView = lazyWithRetry(() => import('./components/GridReportView'));
-const RdlReportView = lazyWithRetry(() => import('./components/RdlReportView'));
-const CRMView = lazyWithRetry(() => import('./components/CRMView'));
-const ProjectsView = lazyWithRetry(() => import('./components/ProjectsView'));
-const ManufacturingView = lazyWithRetry(() => import('./components/ManufacturingView'));
-const ServiceView = lazyWithRetry(() => import('./components/ServiceView'));
-const DocumentsView = lazyWithRetry(() => import('./components/DocumentsView'));
-const WorkflowView = lazyWithRetry(() => import('./components/WorkflowView'));
-const AIView = lazyWithRetry(() => import('./components/AIView'));
-const IntegrationView = lazyWithRetry(() => import('./components/IntegrationView'));
-const FixedAssetsView = lazyWithRetry(() => import('./components/FixedAssetsView'));
 
+import AccountingView from './components/AccountingView';
 import { getUnitCostForSale, consumeBatchesForSale, DEFAULT_BATCHES } from './lib/inventoryCosting';
+import GridReportView from './components/GridReportView';
+import RdlReportView from './components/RdlReportView';
 import Login from './components/Login';
+import CRMView from './components/CRMView';
+import ProjectsView from './components/ProjectsView';
+import ManufacturingView from './components/ManufacturingView';
+import ServiceView from './components/ServiceView';
+import DocumentsView from './components/DocumentsView';
+import WorkflowView from './components/WorkflowView';
+import AIView from './components/AIView';
+import IntegrationView from './components/IntegrationView';
+import FixedAssetsView from './components/FixedAssetsView';
 import { navEngine } from './lib/navigationEngine';
 import { WindowManagerProvider, useWindowManager } from './context/WindowManagerContext';
 import WindowHeader from './components/WindowHeader';
@@ -64,7 +64,6 @@ import {
   Unsubscribe,
 } from './lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { clearDashboardCache } from './lib/firestoreQueries';
 
 import {
   Product,
@@ -104,63 +103,6 @@ const LazyLoadingFallback = () => (
     <span className="text-xs text-slate-400 font-mono">মডিউল লোড হচ্ছে...</span>
   </div>
 );
-
-/**
- * Fast structural check to determine if a real-time Firestore collection snapshot
- * actually differs from the currently held React state array without expensive
- * full-array JSON.stringify serialization.
- */
-function areCollectionsEqual<T extends Record<string, any>>(
-  newArr: T[] | undefined | null,
-  oldArr: T[] | undefined | null
-): boolean {
-  if (newArr === oldArr) return true;
-  if (!newArr || !oldArr) return !newArr && !oldArr;
-  if (newArr.length !== oldArr.length) return false;
-
-  for (let i = 0; i < newArr.length; i++) {
-    const a = newArr[i];
-    const b = oldArr[i];
-    if (a === b) continue;
-    if (!a || !b) return false;
-    if (a.id !== b.id) return false;
-
-    const tA = a.updatedAt || a.lastUpdated || a.updated_at || a.date;
-    const tB = b.updatedAt || b.lastUpdated || b.updated_at || b.date;
-    if (tA || tB) {
-      if (tA !== tB) return false;
-    }
-    if (
-      a.total !== b.total ||
-      a.amount !== b.amount ||
-      a.stock !== b.stock ||
-      a.status !== b.status ||
-      a.name !== b.name ||
-      a.title !== b.title ||
-      a.price !== b.price ||
-      a.cost !== b.cost
-    ) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function areSettingsEqual(a: any, b: any): boolean {
-  if (a === b) return true;
-  if (!a || !b) return false;
-  const keysA = Object.keys(a);
-  const keysB = Object.keys(b);
-  if (keysA.length !== keysB.length) return false;
-  for (const k of keysA) {
-    if (typeof a[k] === 'object' && a[k] !== null) {
-      if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) return false;
-    } else if (a[k] !== b[k]) {
-      return false;
-    }
-  }
-  return true;
-}
 
 function AppContent() {
   const { windows, openWindow } = useWindowManager();
@@ -288,7 +230,6 @@ function AppContent() {
 
   const handleLogout = async () => {
     try {
-      clearDashboardCache();
       await signOutUser();
     } catch (e) {
       console.error("Error during log out:", e);
@@ -503,8 +444,41 @@ function AppContent() {
     const unsubs: Unsubscribe[] = [];
 
     async function initRealtimeSubscriptions() {
+      setLoading(true);
       try {
-        // 1. Subscribe to real-time updates immediately for all core collections + settings
+        // 1. Fetch settings once to check seeding status
+        const settingsDocs = await fetchCollectionFromFirestore<any>('settings');
+        const appSettingsDoc = settingsDocs.find((d) => d.id === 'app');
+
+        const isDbSeeded = appSettingsDoc?.isDbSeeded === true;
+
+        if (!isDbSeeded) {
+          // Brand new database, run initial seeding
+          await Promise.all([
+            seedCollectionIfEmpty('products', INITIAL_PRODUCTS),
+            seedCollectionIfEmpty('customers', INITIAL_CUSTOMERS),
+            seedCollectionIfEmpty('suppliers', INITIAL_SUPPLIERS),
+            seedCollectionIfEmpty('invoices', INITIAL_INVOICES),
+            seedCollectionIfEmpty('purchaseOrders', INITIAL_PO),
+            seedCollectionIfEmpty('bankAccounts', INITIAL_BANK_ACCOUNTS),
+            seedCollectionIfEmpty('transactions', INITIAL_TRANSACTIONS),
+            seedCollectionIfEmpty('accountHeads', INITIAL_ACCOUNT_HEADS),
+            seedCollectionIfEmpty('employees', INITIAL_EMPLOYEES),
+            seedCollectionIfEmpty('attendances', INITIAL_ATTENDANCE),
+            seedCollectionIfEmpty('loanAccounts', INITIAL_LOANS),
+            seedCollectionIfEmpty('branches', INITIAL_DEFAULT_BRANCHES),
+          ]);
+
+          const initialSettingsWithSeed: AppSettings = {
+            ...DEFAULT_SETTINGS,
+            isDbSeeded: true,
+          };
+          await saveSettingsToFirestore(initialSettingsWithSeed);
+        }
+
+        if (!isSubscribed) return;
+
+        // 2. Subscribe to real-time updates for all 11 core collections + settings
         unsubs.push(
           subscribeToCollection<any>('settings', (docs) => {
             const appSettingsDoc = docs.find((d) => d.id === 'app');
@@ -518,7 +492,7 @@ function AppContent() {
                     ? sanitizedSettings.usersList
                     : DEFAULT_SETTINGS.usersList,
               };
-              if (!areSettingsEqual(mergedSettings, latestStateRef.current.settings)) {
+              if (JSON.stringify(mergedSettings) !== JSON.stringify(latestStateRef.current.settings)) {
                 isRemoteUpdateRef.current['settings'] = true;
                 setSettings(mergedSettings as AppSettings);
               }
@@ -528,16 +502,16 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Product>('products', (items) => {
-            if (!areCollectionsEqual(items || [], latestStateRef.current.products)) {
+            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.products)) {
               isRemoteUpdateRef.current['products'] = true;
               setProducts(items || []);
             }
-          }, 500)
+          })
         );
 
         unsubs.push(
           subscribeToCollection<Customer>('customers', (items) => {
-            if (!areCollectionsEqual(items || [], latestStateRef.current.customers)) {
+            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.customers)) {
               isRemoteUpdateRef.current['customers'] = true;
               setCustomers(items || []);
             }
@@ -546,7 +520,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Supplier>('suppliers', (items) => {
-            if (!areCollectionsEqual(items || [], latestStateRef.current.suppliers)) {
+            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.suppliers)) {
               isRemoteUpdateRef.current['suppliers'] = true;
               setSuppliers(items || []);
             }
@@ -555,16 +529,16 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Invoice>('invoices', (items) => {
-            if (!areCollectionsEqual(items || [], latestStateRef.current.invoices)) {
+            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.invoices)) {
               isRemoteUpdateRef.current['invoices'] = true;
               setInvoices(items || []);
             }
-          }, 500)
+          })
         );
 
         unsubs.push(
           subscribeToCollection<PurchaseOrder>('purchaseOrders', (items) => {
-            if (!areCollectionsEqual(items || [], latestStateRef.current.purchaseOrders)) {
+            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.purchaseOrders)) {
               isRemoteUpdateRef.current['purchaseOrders'] = true;
               setPurchaseOrders(items || []);
             }
@@ -573,7 +547,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<BankAccount>('bankAccounts', (items) => {
-            if (!areCollectionsEqual(items || [], latestStateRef.current.bankAccounts)) {
+            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.bankAccounts)) {
               isRemoteUpdateRef.current['bankAccounts'] = true;
               setBankAccounts(items || []);
             }
@@ -582,16 +556,16 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Transaction>('transactions', (items) => {
-            if (!areCollectionsEqual(items || [], latestStateRef.current.transactions)) {
+            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.transactions)) {
               isRemoteUpdateRef.current['transactions'] = true;
               setTransactions(items || []);
             }
-          }, 500)
+          })
         );
 
         unsubs.push(
           subscribeToCollection<AccountHead>('accountHeads', (items) => {
-            if (!areCollectionsEqual(items || [], latestStateRef.current.accountHeads)) {
+            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.accountHeads)) {
               isRemoteUpdateRef.current['accountHeads'] = true;
               setAccountHeads(items || []);
             }
@@ -600,7 +574,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Employee>('employees', (items) => {
-            if (!areCollectionsEqual(items || [], latestStateRef.current.employees)) {
+            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.employees)) {
               isRemoteUpdateRef.current['employees'] = true;
               setEmployees(items || []);
             }
@@ -609,7 +583,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Attendance>('attendances', (items) => {
-            if (!areCollectionsEqual(items || [], latestStateRef.current.attendances)) {
+            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.attendances)) {
               isRemoteUpdateRef.current['attendances'] = true;
               setAttendances(items || []);
             }
@@ -618,7 +592,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<LoanAccount>('loanAccounts', (items) => {
-            if (!areCollectionsEqual(items || [], latestStateRef.current.loanAccounts)) {
+            if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.loanAccounts)) {
               isRemoteUpdateRef.current['loanAccounts'] = true;
               setLoanAccounts(items || []);
             }
@@ -630,19 +604,9 @@ function AppContent() {
             if (items && items.length > 0) {
               const sorted = [...items].sort((a, b) => (b.isMainBranch ? 1 : 0) - (a.isMainBranch ? 1 : 0));
               setBranches(sorted);
-              if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
-                (window as any).requestIdleCallback(() => {
-                  try {
-                    localStorage.setItem('nexova_branches_v2', JSON.stringify(sorted));
-                  } catch (e) {}
-                });
-              } else {
-                setTimeout(() => {
-                  try {
-                    localStorage.setItem('nexova_branches_v2', JSON.stringify(sorted));
-                  } catch (e) {}
-                }, 200);
-              }
+              try {
+                localStorage.setItem('nexova_branches_v2', JSON.stringify(sorted));
+              } catch (e) {}
             } else {
               const saved = localStorage.getItem('nexova_branches_v2');
               if (saved) {
@@ -658,34 +622,6 @@ function AppContent() {
             }
           })
         );
-
-        // Asynchronously check database seeding in background without blocking initial app render
-        fetchCollectionFromFirestore<any>('settings').then(async (settingsDocs) => {
-          const appSettingsDoc = settingsDocs.find((d) => d.id === 'app');
-          const isDbSeeded = appSettingsDoc?.isDbSeeded === true;
-          if (!isDbSeeded) {
-            await Promise.all([
-              seedCollectionIfEmpty('products', INITIAL_PRODUCTS),
-              seedCollectionIfEmpty('customers', INITIAL_CUSTOMERS),
-              seedCollectionIfEmpty('suppliers', INITIAL_SUPPLIERS),
-              seedCollectionIfEmpty('invoices', INITIAL_INVOICES),
-              seedCollectionIfEmpty('purchaseOrders', INITIAL_PO),
-              seedCollectionIfEmpty('bankAccounts', INITIAL_BANK_ACCOUNTS),
-              seedCollectionIfEmpty('transactions', INITIAL_TRANSACTIONS),
-              seedCollectionIfEmpty('accountHeads', INITIAL_ACCOUNT_HEADS),
-              seedCollectionIfEmpty('employees', INITIAL_EMPLOYEES),
-              seedCollectionIfEmpty('attendances', INITIAL_ATTENDANCE),
-              seedCollectionIfEmpty('loanAccounts', INITIAL_LOANS),
-              seedCollectionIfEmpty('branches', INITIAL_DEFAULT_BRANCHES),
-            ]);
-
-            const initialSettingsWithSeed: AppSettings = {
-              ...DEFAULT_SETTINGS,
-              isDbSeeded: true,
-            };
-            await saveSettingsToFirestore(initialSettingsWithSeed);
-          }
-        }).catch((err) => console.warn('Background seed check notice:', err));
       } catch (e) {
         console.error('Error initializing real-time subscriptions:', e);
       } finally {
@@ -1787,20 +1723,18 @@ function AppContent() {
 
           {tabKey === 'accounting' && (
             <ErrorBoundary variant="section" sectionName="General Ledger & Accounting Module">
-              <Suspense fallback={<LazyLoadingFallback />}>
-                {subTabKey === 'assets' ? (
-                  <FixedAssetsView activeSubTab={subTabKey} currentUser={currentUser} />
-                ) : (
-                  <AccountingView
-                    accountHeads={accountHeads}
-                    transactions={transactions}
-                    bankAccounts={bankAccounts}
-                    onLogTransaction={handleLogTransaction}
-                    activeSubTab={subTabKey}
-                    settings={settings}
-                  />
-                )}
-              </Suspense>
+              {subTabKey === 'assets' ? (
+                <FixedAssetsView activeSubTab={subTabKey} currentUser={currentUser} />
+              ) : (
+                <AccountingView
+                  accountHeads={accountHeads}
+                  transactions={transactions}
+                  bankAccounts={bankAccounts}
+                  onLogTransaction={handleLogTransaction}
+                  activeSubTab={subTabKey}
+                  settings={settings}
+                />
+              )}
             </ErrorBoundary>
           )}
 
@@ -1865,122 +1799,102 @@ function AppContent() {
 
           {tabKey === 'gridReport' && (
             <ErrorBoundary variant="section" sectionName="Dynamic Custom Grid Reports Module">
-              <Suspense fallback={<LazyLoadingFallback />}>
-                <GridReportView
-                  products={products}
-                  customers={customers}
-                  suppliers={suppliers}
-                  invoices={invoices}
-                  transactions={transactions}
-                  onUpdateProducts={setProducts}
-                  onUpdateInvoices={setInvoices}
-                  onUpdateCustomers={setCustomers}
-                  onUpdateSuppliers={setSuppliers}
-                  onUpdateTransactions={setTransactions}
-                  isVisualEditMode={isVisualEditMode}
-                  currentSubTab={subTabKey}
-                />
-              </Suspense>
+              <GridReportView
+                products={products}
+                customers={customers}
+                suppliers={suppliers}
+                invoices={invoices}
+                transactions={transactions}
+                onUpdateProducts={setProducts}
+                onUpdateInvoices={setInvoices}
+                onUpdateCustomers={setCustomers}
+                onUpdateSuppliers={setSuppliers}
+                onUpdateTransactions={setTransactions}
+                isVisualEditMode={isVisualEditMode}
+                currentSubTab={subTabKey}
+              />
             </ErrorBoundary>
           )}
 
           {tabKey === 'rdlReport' && (
             <ErrorBoundary variant="section" sectionName="RDL Template Report Builder Module">
-              <Suspense fallback={<LazyLoadingFallback />}>
-                <RdlReportView
-                  products={products}
-                  customers={customers}
-                  suppliers={suppliers}
-                  invoices={invoices}
-                  transactions={transactions}
-                  isVisualEditMode={isVisualEditMode}
-                  currentSubTab={subTabKey}
-                />
-              </Suspense>
+              <RdlReportView
+                products={products}
+                customers={customers}
+                suppliers={suppliers}
+                invoices={invoices}
+                transactions={transactions}
+                isVisualEditMode={isVisualEditMode}
+                currentSubTab={subTabKey}
+              />
             </ErrorBoundary>
           )}
 
           {tabKey === 'crm' && (
             <ErrorBoundary variant="section" sectionName="CRM & Leads Module">
-              <Suspense fallback={<LazyLoadingFallback />}>
-                <CRMView activeSubTab={subTabKey} currentUser={currentUser} />
-              </Suspense>
+              <CRMView activeSubTab={subTabKey} currentUser={currentUser} />
             </ErrorBoundary>
           )}
 
           {tabKey === 'projects' && (
             <ErrorBoundary variant="section" sectionName="Projects & Timesheets Module">
-              <Suspense fallback={<LazyLoadingFallback />}>
-                <ProjectsView activeSubTab={subTabKey} currentUser={currentUser} />
-              </Suspense>
+              <ProjectsView activeSubTab={subTabKey} currentUser={currentUser} />
             </ErrorBoundary>
           )}
 
           {tabKey === 'manufacturing' && (
             <ErrorBoundary variant="section" sectionName="Manufacturing Production Module">
-              <Suspense fallback={<LazyLoadingFallback />}>
-                <ManufacturingView
-                  activeSubTab={subTabKey}
-                  currentUser={currentUser}
-                  products={products}
-                  setProducts={setProducts}
-                  transactions={transactions}
-                  setTransactions={setTransactions}
-                  accountHeads={accountHeads}
-                  setAccountHeads={setAccountHeads}
-                />
-              </Suspense>
+              <ManufacturingView
+                activeSubTab={subTabKey}
+                currentUser={currentUser}
+                products={products}
+                setProducts={setProducts}
+                transactions={transactions}
+                setTransactions={setTransactions}
+                accountHeads={accountHeads}
+                setAccountHeads={setAccountHeads}
+              />
             </ErrorBoundary>
           )}
 
           {tabKey === 'service' && (
             <ErrorBoundary variant="section" sectionName="Service Tickets & Helpdesk Module">
-              <Suspense fallback={<LazyLoadingFallback />}>
-                <ServiceView activeSubTab={subTabKey} currentUser={currentUser} />
-              </Suspense>
+              <ServiceView activeSubTab={subTabKey} currentUser={currentUser} />
             </ErrorBoundary>
           )}
 
           {tabKey === 'documents' && (
             <ErrorBoundary variant="section" sectionName="Document Repository & Contracts Module">
-              <Suspense fallback={<LazyLoadingFallback />}>
-                <DocumentsView activeSubTab={subTabKey} />
-              </Suspense>
+              <DocumentsView activeSubTab={subTabKey} />
             </ErrorBoundary>
           )}
 
           {tabKey === 'workflow' && (
             <ErrorBoundary variant="section" sectionName="Business Workflow Approval Engine">
-              <Suspense fallback={<LazyLoadingFallback />}>
-                <WorkflowView activeSubTab={subTabKey} />
-              </Suspense>
+              <WorkflowView activeSubTab={subTabKey} />
             </ErrorBoundary>
           )}
 
           {tabKey === 'ai' && (
             <ErrorBoundary variant="section" sectionName="Gemini AI Assistant Module">
-              <Suspense fallback={<LazyLoadingFallback />}>
-                <AIView
-                  activeSubTab={subTabKey}
-                  settings={settings}
-                  products={products}
-                  customers={customers}
-                  suppliers={suppliers}
-                  invoices={invoices}
-                  purchaseOrders={purchaseOrders}
-                  bankAccounts={bankAccounts}
-                  transactions={transactions}
-                  employees={employees}
-                />
-              </Suspense>
+              <AIView
+                activeSubTab={subTabKey}
+                settings={settings}
+                products={products}
+                customers={customers}
+                suppliers={suppliers}
+                invoices={invoices}
+                purchaseOrders={purchaseOrders}
+                bankAccounts={bankAccounts}
+                transactions={transactions}
+                employees={employees}
+              />
             </ErrorBoundary>
           )}
 
           {tabKey === 'integration' && (
             <ErrorBoundary variant="section" sectionName="Third-Party Integration Engine">
-              <Suspense fallback={<LazyLoadingFallback />}>
-                <IntegrationView activeSubTab={subTabKey} />
-              </Suspense>
+              <IntegrationView activeSubTab={subTabKey} />
             </ErrorBoundary>
           )}
 

@@ -78,10 +78,9 @@ export async function fetchErrorLogsFromFirestore(): Promise<ErrorLogEntry[]> {
  */
 export async function clearErrorLogsFromFirestore(): Promise<void> {
   if (!db) return;
-  const database = db;
   try {
     const logs = await fetchErrorLogsFromFirestore();
-    const deletePromises = logs.map((l) => (l.id ? deleteDoc(doc(database, 'error_logs', l.id)) : Promise.resolve()));
+    const deletePromises = logs.map((l) => (l.id ? deleteDoc(doc(db, 'error_logs', l.id)) : Promise.resolve()));
     await Promise.all(deletePromises);
   } catch (e) {
     console.error('Failed to clear error logs:', e);
