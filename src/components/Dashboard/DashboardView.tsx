@@ -180,8 +180,8 @@ export const MainDashboardView: React.FC<MainDashboardViewProps> = ({
   );
 
   const cashMetrics = useMemo(
-    () => calculateCashPosition(bankAccounts),
-    [bankAccounts]
+    () => calculateCashPosition(bankAccounts, propTransactions),
+    [bankAccounts, propTransactions]
   );
 
   const customerMetrics = useMemo(
@@ -201,8 +201,8 @@ export const MainDashboardView: React.FC<MainDashboardViewProps> = ({
   );
 
   const arVsApData = useMemo(
-    () => getARvsAPData(customers, suppliers, invoices),
-    [customers, suppliers, invoices]
+    () => getARvsAPData(customers, suppliers, invoices, purchaseOrders),
+    [customers, suppliers, invoices, purchaseOrders]
   );
 
   const inventoryHealthData = useMemo(
@@ -211,8 +211,8 @@ export const MainDashboardView: React.FC<MainDashboardViewProps> = ({
   );
 
   const alertsData = useMemo(
-    () => getAlertsData(products, customers, suppliers, loanAccounts, employees),
-    [products, customers, suppliers, loanAccounts, employees]
+    () => getAlertsData(products, customers, suppliers, loanAccounts, employees, purchaseOrders),
+    [products, customers, suppliers, loanAccounts, employees, purchaseOrders]
   );
 
   // Print / Export PDF Handler

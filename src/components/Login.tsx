@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { User, Lock, LogIn, AlertCircle, Info, Loader2 } from 'lucide-react';
 import { AppSettings } from '../types';
 import { db, signIn, signOutUser, isFirebaseConfigured } from '../lib/firebase';
+import { clearDashboardCache } from '../lib/firestoreQueries';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface LoginProps {
@@ -103,6 +104,7 @@ export default function Login({ settings, onLoginSuccess }: LoginProps) {
 
       if (profileData.status !== 'Active') {
         setError('This account is currently inactive. Please contact support. / এই অ্যাকাউন্টটি নিষ্ক্রিয় করা আছে। অনুগ্রহ করে এডমিনের সাথে যোগাযোগ করুন।');
+        clearDashboardCache();
         await signOutUser();
         return;
       }

@@ -24,28 +24,28 @@ const lazyWithRetry = (factory: () => Promise<any>) =>
     }
   });
 
-// Lazy load large per-module view components (>2000 lines) to support optimal bundle size split
+// Lazy load per-module view components to support optimal bundle size split
 const InventoryView = lazyWithRetry(() => import('./components/InventoryView'));
 const SalesView = lazyWithRetry(() => import('./components/SalesView'));
 const PurchaseView = lazyWithRetry(() => import('./components/PurchaseView'));
 const EmployeeView = lazyWithRetry(() => import('./components/EmployeeView'));
 const BankingAndLoanView = lazyWithRetry(() => import('./components/BankingAndLoanView'));
 const ReportsView = lazyWithRetry(() => import('./components/ReportsView'));
+const AccountingView = lazyWithRetry(() => import('./components/AccountingView'));
+const GridReportView = lazyWithRetry(() => import('./components/GridReportView'));
+const RdlReportView = lazyWithRetry(() => import('./components/RdlReportView'));
+const CRMView = lazyWithRetry(() => import('./components/CRMView'));
+const ProjectsView = lazyWithRetry(() => import('./components/ProjectsView'));
+const ManufacturingView = lazyWithRetry(() => import('./components/ManufacturingView'));
+const ServiceView = lazyWithRetry(() => import('./components/ServiceView'));
+const DocumentsView = lazyWithRetry(() => import('./components/DocumentsView'));
+const WorkflowView = lazyWithRetry(() => import('./components/WorkflowView'));
+const AIView = lazyWithRetry(() => import('./components/AIView'));
+const IntegrationView = lazyWithRetry(() => import('./components/IntegrationView'));
+const FixedAssetsView = lazyWithRetry(() => import('./components/FixedAssetsView'));
 
-import AccountingView from './components/AccountingView';
 import { getUnitCostForSale, consumeBatchesForSale, DEFAULT_BATCHES } from './lib/inventoryCosting';
-import GridReportView from './components/GridReportView';
-import RdlReportView from './components/RdlReportView';
 import Login from './components/Login';
-import CRMView from './components/CRMView';
-import ProjectsView from './components/ProjectsView';
-import ManufacturingView from './components/ManufacturingView';
-import ServiceView from './components/ServiceView';
-import DocumentsView from './components/DocumentsView';
-import WorkflowView from './components/WorkflowView';
-import AIView from './components/AIView';
-import IntegrationView from './components/IntegrationView';
-import FixedAssetsView from './components/FixedAssetsView';
 import { navEngine } from './lib/navigationEngine';
 import { WindowManagerProvider, useWindowManager } from './context/WindowManagerContext';
 import WindowHeader from './components/WindowHeader';
@@ -64,6 +64,7 @@ import {
   Unsubscribe,
 } from './lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
+import { clearDashboardCache } from './lib/firestoreQueries';
 
 import {
   Product,
@@ -230,6 +231,7 @@ function AppContent() {
 
   const handleLogout = async () => {
     try {
+      clearDashboardCache();
       await signOutUser();
     } catch (e) {
       console.error("Error during log out:", e);
@@ -444,41 +446,8 @@ function AppContent() {
     const unsubs: Unsubscribe[] = [];
 
     async function initRealtimeSubscriptions() {
-      setLoading(true);
       try {
-        // 1. Fetch settings once to check seeding status
-        const settingsDocs = await fetchCollectionFromFirestore<any>('settings');
-        const appSettingsDoc = settingsDocs.find((d) => d.id === 'app');
-
-        const isDbSeeded = appSettingsDoc?.isDbSeeded === true;
-
-        if (!isDbSeeded) {
-          // Brand new database, run initial seeding
-          await Promise.all([
-            seedCollectionIfEmpty('products', INITIAL_PRODUCTS),
-            seedCollectionIfEmpty('customers', INITIAL_CUSTOMERS),
-            seedCollectionIfEmpty('suppliers', INITIAL_SUPPLIERS),
-            seedCollectionIfEmpty('invoices', INITIAL_INVOICES),
-            seedCollectionIfEmpty('purchaseOrders', INITIAL_PO),
-            seedCollectionIfEmpty('bankAccounts', INITIAL_BANK_ACCOUNTS),
-            seedCollectionIfEmpty('transactions', INITIAL_TRANSACTIONS),
-            seedCollectionIfEmpty('accountHeads', INITIAL_ACCOUNT_HEADS),
-            seedCollectionIfEmpty('employees', INITIAL_EMPLOYEES),
-            seedCollectionIfEmpty('attendances', INITIAL_ATTENDANCE),
-            seedCollectionIfEmpty('loanAccounts', INITIAL_LOANS),
-            seedCollectionIfEmpty('branches', INITIAL_DEFAULT_BRANCHES),
-          ]);
-
-          const initialSettingsWithSeed: AppSettings = {
-            ...DEFAULT_SETTINGS,
-            isDbSeeded: true,
-          };
-          await saveSettingsToFirestore(initialSettingsWithSeed);
-        }
-
-        if (!isSubscribed) return;
-
-        // 2. Subscribe to real-time updates for all 11 core collections + settings
+        // 1. Subscribe to real-time updates immediately for all core collections + settings
         unsubs.push(
           subscribeToCollection<any>('settings', (docs) => {
             const appSettingsDoc = docs.find((d) => d.id === 'app');
@@ -506,7 +475,7 @@ function AppContent() {
               isRemoteUpdateRef.current['products'] = true;
               setProducts(items || []);
             }
-          })
+          }, 500)
         );
 
         unsubs.push(
@@ -533,7 +502,7 @@ function AppContent() {
               isRemoteUpdateRef.current['invoices'] = true;
               setInvoices(items || []);
             }
-          })
+          }, 500)
         );
 
         unsubs.push(
@@ -560,7 +529,7 @@ function AppContent() {
               isRemoteUpdateRef.current['transactions'] = true;
               setTransactions(items || []);
             }
-          })
+          }, 500)
         );
 
         unsubs.push(
@@ -622,6 +591,34 @@ function AppContent() {
             }
           })
         );
+
+        // Asynchronously check database seeding in background without blocking initial app render
+        fetchCollectionFromFirestore<any>('settings').then(async (settingsDocs) => {
+          const appSettingsDoc = settingsDocs.find((d) => d.id === 'app');
+          const isDbSeeded = appSettingsDoc?.isDbSeeded === true;
+          if (!isDbSeeded) {
+            await Promise.all([
+              seedCollectionIfEmpty('products', INITIAL_PRODUCTS),
+              seedCollectionIfEmpty('customers', INITIAL_CUSTOMERS),
+              seedCollectionIfEmpty('suppliers', INITIAL_SUPPLIERS),
+              seedCollectionIfEmpty('invoices', INITIAL_INVOICES),
+              seedCollectionIfEmpty('purchaseOrders', INITIAL_PO),
+              seedCollectionIfEmpty('bankAccounts', INITIAL_BANK_ACCOUNTS),
+              seedCollectionIfEmpty('transactions', INITIAL_TRANSACTIONS),
+              seedCollectionIfEmpty('accountHeads', INITIAL_ACCOUNT_HEADS),
+              seedCollectionIfEmpty('employees', INITIAL_EMPLOYEES),
+              seedCollectionIfEmpty('attendances', INITIAL_ATTENDANCE),
+              seedCollectionIfEmpty('loanAccounts', INITIAL_LOANS),
+              seedCollectionIfEmpty('branches', INITIAL_DEFAULT_BRANCHES),
+            ]);
+
+            const initialSettingsWithSeed: AppSettings = {
+              ...DEFAULT_SETTINGS,
+              isDbSeeded: true,
+            };
+            await saveSettingsToFirestore(initialSettingsWithSeed);
+          }
+        }).catch((err) => console.warn('Background seed check notice:', err));
       } catch (e) {
         console.error('Error initializing real-time subscriptions:', e);
       } finally {
@@ -1723,18 +1720,20 @@ function AppContent() {
 
           {tabKey === 'accounting' && (
             <ErrorBoundary variant="section" sectionName="General Ledger & Accounting Module">
-              {subTabKey === 'assets' ? (
-                <FixedAssetsView activeSubTab={subTabKey} currentUser={currentUser} />
-              ) : (
-                <AccountingView
-                  accountHeads={accountHeads}
-                  transactions={transactions}
-                  bankAccounts={bankAccounts}
-                  onLogTransaction={handleLogTransaction}
-                  activeSubTab={subTabKey}
-                  settings={settings}
-                />
-              )}
+              <Suspense fallback={<LazyLoadingFallback />}>
+                {subTabKey === 'assets' ? (
+                  <FixedAssetsView activeSubTab={subTabKey} currentUser={currentUser} />
+                ) : (
+                  <AccountingView
+                    accountHeads={accountHeads}
+                    transactions={transactions}
+                    bankAccounts={bankAccounts}
+                    onLogTransaction={handleLogTransaction}
+                    activeSubTab={subTabKey}
+                    settings={settings}
+                  />
+                )}
+              </Suspense>
             </ErrorBoundary>
           )}
 
@@ -1799,102 +1798,122 @@ function AppContent() {
 
           {tabKey === 'gridReport' && (
             <ErrorBoundary variant="section" sectionName="Dynamic Custom Grid Reports Module">
-              <GridReportView
-                products={products}
-                customers={customers}
-                suppliers={suppliers}
-                invoices={invoices}
-                transactions={transactions}
-                onUpdateProducts={setProducts}
-                onUpdateInvoices={setInvoices}
-                onUpdateCustomers={setCustomers}
-                onUpdateSuppliers={setSuppliers}
-                onUpdateTransactions={setTransactions}
-                isVisualEditMode={isVisualEditMode}
-                currentSubTab={subTabKey}
-              />
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <GridReportView
+                  products={products}
+                  customers={customers}
+                  suppliers={suppliers}
+                  invoices={invoices}
+                  transactions={transactions}
+                  onUpdateProducts={setProducts}
+                  onUpdateInvoices={setInvoices}
+                  onUpdateCustomers={setCustomers}
+                  onUpdateSuppliers={setSuppliers}
+                  onUpdateTransactions={setTransactions}
+                  isVisualEditMode={isVisualEditMode}
+                  currentSubTab={subTabKey}
+                />
+              </Suspense>
             </ErrorBoundary>
           )}
 
           {tabKey === 'rdlReport' && (
             <ErrorBoundary variant="section" sectionName="RDL Template Report Builder Module">
-              <RdlReportView
-                products={products}
-                customers={customers}
-                suppliers={suppliers}
-                invoices={invoices}
-                transactions={transactions}
-                isVisualEditMode={isVisualEditMode}
-                currentSubTab={subTabKey}
-              />
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <RdlReportView
+                  products={products}
+                  customers={customers}
+                  suppliers={suppliers}
+                  invoices={invoices}
+                  transactions={transactions}
+                  isVisualEditMode={isVisualEditMode}
+                  currentSubTab={subTabKey}
+                />
+              </Suspense>
             </ErrorBoundary>
           )}
 
           {tabKey === 'crm' && (
             <ErrorBoundary variant="section" sectionName="CRM & Leads Module">
-              <CRMView activeSubTab={subTabKey} currentUser={currentUser} />
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <CRMView activeSubTab={subTabKey} currentUser={currentUser} />
+              </Suspense>
             </ErrorBoundary>
           )}
 
           {tabKey === 'projects' && (
             <ErrorBoundary variant="section" sectionName="Projects & Timesheets Module">
-              <ProjectsView activeSubTab={subTabKey} currentUser={currentUser} />
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <ProjectsView activeSubTab={subTabKey} currentUser={currentUser} />
+              </Suspense>
             </ErrorBoundary>
           )}
 
           {tabKey === 'manufacturing' && (
             <ErrorBoundary variant="section" sectionName="Manufacturing Production Module">
-              <ManufacturingView
-                activeSubTab={subTabKey}
-                currentUser={currentUser}
-                products={products}
-                setProducts={setProducts}
-                transactions={transactions}
-                setTransactions={setTransactions}
-                accountHeads={accountHeads}
-                setAccountHeads={setAccountHeads}
-              />
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <ManufacturingView
+                  activeSubTab={subTabKey}
+                  currentUser={currentUser}
+                  products={products}
+                  setProducts={setProducts}
+                  transactions={transactions}
+                  setTransactions={setTransactions}
+                  accountHeads={accountHeads}
+                  setAccountHeads={setAccountHeads}
+                />
+              </Suspense>
             </ErrorBoundary>
           )}
 
           {tabKey === 'service' && (
             <ErrorBoundary variant="section" sectionName="Service Tickets & Helpdesk Module">
-              <ServiceView activeSubTab={subTabKey} currentUser={currentUser} />
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <ServiceView activeSubTab={subTabKey} currentUser={currentUser} />
+              </Suspense>
             </ErrorBoundary>
           )}
 
           {tabKey === 'documents' && (
             <ErrorBoundary variant="section" sectionName="Document Repository & Contracts Module">
-              <DocumentsView activeSubTab={subTabKey} />
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <DocumentsView activeSubTab={subTabKey} />
+              </Suspense>
             </ErrorBoundary>
           )}
 
           {tabKey === 'workflow' && (
             <ErrorBoundary variant="section" sectionName="Business Workflow Approval Engine">
-              <WorkflowView activeSubTab={subTabKey} />
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <WorkflowView activeSubTab={subTabKey} />
+              </Suspense>
             </ErrorBoundary>
           )}
 
           {tabKey === 'ai' && (
             <ErrorBoundary variant="section" sectionName="Gemini AI Assistant Module">
-              <AIView
-                activeSubTab={subTabKey}
-                settings={settings}
-                products={products}
-                customers={customers}
-                suppliers={suppliers}
-                invoices={invoices}
-                purchaseOrders={purchaseOrders}
-                bankAccounts={bankAccounts}
-                transactions={transactions}
-                employees={employees}
-              />
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <AIView
+                  activeSubTab={subTabKey}
+                  settings={settings}
+                  products={products}
+                  customers={customers}
+                  suppliers={suppliers}
+                  invoices={invoices}
+                  purchaseOrders={purchaseOrders}
+                  bankAccounts={bankAccounts}
+                  transactions={transactions}
+                  employees={employees}
+                />
+              </Suspense>
             </ErrorBoundary>
           )}
 
           {tabKey === 'integration' && (
             <ErrorBoundary variant="section" sectionName="Third-Party Integration Engine">
-              <IntegrationView activeSubTab={subTabKey} />
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <IntegrationView activeSubTab={subTabKey} />
+              </Suspense>
             </ErrorBoundary>
           )}
 
