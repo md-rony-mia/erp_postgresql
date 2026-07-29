@@ -60,7 +60,7 @@ export default function Login({ settings, onLoginSuccess }: LoginProps) {
       const fbUser = userCredential.user;
 
       let profileData;
-      if (isFirebaseConfigured) {
+      if (isFirebaseConfigured && db) {
         try {
           const userDocRef = doc(db, 'users', fbUser.uid);
           const userDocSnap = await getDoc(userDocRef);

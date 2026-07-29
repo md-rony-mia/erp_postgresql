@@ -40,6 +40,7 @@ export async function fetchExecutiveDashboardData(
 
   try {
     const fetchCol = async <T>(colName: string, maxItems = 200): Promise<T[]> => {
+      if (!db) return [];
       try {
         const q = query(collection(db, colName), limit(maxItems));
         const snap = await getDocs(q);
