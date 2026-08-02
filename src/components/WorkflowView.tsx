@@ -21,7 +21,7 @@ import {
   Edit,
   Shield
 } from 'lucide-react';
-import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/firebase';
+import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/dataClient';
 
 interface WorkflowViewProps {
   activeSubTab?: string;

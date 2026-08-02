@@ -20,7 +20,7 @@ import {
   ShieldCheck,
   Sparkles
 } from 'lucide-react';
-import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/firebase';
+import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/dataClient';
 
 interface DocumentsViewProps {
   activeSubTab?: string;

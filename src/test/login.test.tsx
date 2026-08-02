@@ -4,26 +4,13 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 import Login from '../components/Login';
 import { AppSettings } from '../types';
 
-// Mock Firebase helpers
+// Mock the Postgres-backed auth client
 const mockSignIn = vi.fn();
 const mockSignOutUser = vi.fn();
 
-vi.mock('../lib/firebase', () => ({
-  db: {},
-  isFirebaseConfigured: true,
+vi.mock('../lib/dataClient', () => ({
   signIn: (...args: any[]) => mockSignIn(...args),
   signOutUser: (...args: any[]) => mockSignOutUser(...args),
-}));
-
-// Mock Firestore operations
-const mockDoc = vi.fn();
-const mockGetDoc = vi.fn();
-const mockSetDoc = vi.fn();
-
-vi.mock('firebase/firestore', () => ({
-  doc: (...args: any[]) => mockDoc(...args),
-  getDoc: (...args: any[]) => mockGetDoc(...args),
-  setDoc: (...args: any[]) => mockSetDoc(...args),
 }));
 
 describe('Login Component Smoke Tests', () => {
@@ -56,24 +43,15 @@ describe('Login Component Smoke Tests', () => {
     expect(await screen.findByText(/Username or Email is required/i)).toBeInTheDocument();
   });
 
-  it('signs in successfully with matching user credentials and invokes success callback', async () => {
+  it('signs in successfully with the entered identifier and invokes success callback with the returned profile', async () => {
     mockSignIn.mockResolvedValueOnce({
       user: {
-        uid: 'user-uid-abc',
-        email: 'ronymia2022@gmail.com',
-        displayName: 'Rony Mia',
-      },
-    });
-
-    mockGetDoc.mockResolvedValueOnce({
-      exists: () => true,
-      data: () => ({
         uid: 'user-uid-abc',
         name: 'Rony Mia',
         email: 'ronymia2022@gmail.com',
         role: 'Administrator',
         status: 'Active',
-      }),
+      },
     });
 
     render(<Login settings={mockSettings} onLoginSuccess={mockOnLoginSuccess} />);
@@ -89,7 +67,8 @@ describe('Login Component Smoke Tests', () => {
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
-      expect(mockSignIn).toHaveBeenCalledWith('ronymia2022@gmail.com', 'secretPass123');
+      // The backend resolves username-or-email itself, so the raw identifier is passed through
+      expect(mockSignIn).toHaveBeenCalledWith('admin_rony', 'secretPass123');
       expect(mockOnLoginSuccess).toHaveBeenCalledWith({
         uid: 'user-uid-abc',
         name: 'Rony Mia',

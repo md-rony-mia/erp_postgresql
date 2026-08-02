@@ -21,7 +21,7 @@ import {
 import PageStandardsWrapper from './PageStandardsWrapper';
 import UniversalCrudEngine from './UniversalCrudEngine';
 import { PROJECTS_CONFIG } from '../metadata/configs';
-import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/firebase';
+import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/dataClient';
 
 interface ProjectsViewProps {
   activeSubTab?: string;

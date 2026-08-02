@@ -1,6 +1,3 @@
-import { collection, addDoc, getDocs, query, orderBy, limit, deleteDoc, doc } from 'firebase/firestore';
-import { db } from './firebase';
-
 export interface ErrorLogEntry {
   id?: string;
   timestamp: string;
@@ -14,8 +11,8 @@ export interface ErrorLogEntry {
 }
 
 /**
- * Lightweight error logging utility for writing component crashes and system exceptions to Firestore 'error_logs'.
- * Safe execution guarantee: never throws exceptions if Firestore write fails.
+ * Lightweight error logging utility for writing component crashes and system exceptions
+ * to the 'error_logs' collection via the API. Safe execution guarantee: never throws.
  */
 export async function logErrorToFirestore(params: {
   message: string;
@@ -41,47 +38,47 @@ export async function logErrorToFirestore(params: {
     userAgent: typeof navigator !== 'undefined' ? navigator.userAgent.slice(0, 200) : 'unknown',
   };
 
-  // Always output to developer console
   console.error('[ErrorLogger Captured]', logEntry);
 
   try {
-    if (db) {
-      await addDoc(collection(db, 'error_logs'), logEntry);
-    }
+    await fetch('/api/error-logs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(logEntry),
+    });
   } catch (e) {
-    // Fail-safe fallback so error logging never causes secondary crashes
-    console.error('Failed to write error log entry to Firestore:', e);
+    console.error('Failed to write error log entry:', e);
   }
 }
 
 /**
- * Fetch recent error log entries from Firestore for Administrator inspection.
+ * Fetch recent error log entries for Administrator inspection.
  */
 export async function fetchErrorLogsFromFirestore(): Promise<ErrorLogEntry[]> {
-  if (!db) return [];
   try {
-    const q = query(collection(db, 'error_logs'), orderBy('timestamp', 'desc'), limit(50));
-    const querySnapshot = await getDocs(q);
-    const logs: ErrorLogEntry[] = [];
-    querySnapshot.forEach((docSnap) => {
-      logs.push({ id: docSnap.id, ...(docSnap.data() as Omit<ErrorLogEntry, 'id'>) });
+    const token = localStorage.getItem('nexova_auth_token');
+    const res = await fetch('/api/error-logs', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
-    return logs;
+    if (!res.ok) return [];
+    const body = await res.json();
+    return body.items || [];
   } catch (e) {
-    console.error('Failed to fetch error logs from Firestore:', e);
+    console.error('Failed to fetch error logs:', e);
     return [];
   }
 }
 
 /**
- * Delete all error logs from Firestore.
+ * Delete all error logs.
  */
 export async function clearErrorLogsFromFirestore(): Promise<void> {
-  if (!db) return;
   try {
-    const logs = await fetchErrorLogsFromFirestore();
-    const deletePromises = logs.map((l) => (l.id ? deleteDoc(doc(db, 'error_logs', l.id)) : Promise.resolve()));
-    await Promise.all(deletePromises);
+    const token = localStorage.getItem('nexova_auth_token');
+    await fetch('/api/error-logs', {
+      method: 'DELETE',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
   } catch (e) {
     console.error('Failed to clear error logs:', e);
   }

@@ -6,7 +6,7 @@ This file contains persistent rules, coding conventions, and instructions that t
 - Always respond in Bengali (unless requested otherwise).
 - Maintain the current high-contrast dashboard aesthetic (Tailwind based).
 - Double-check typescript compilation via `npm run lint` or `tsc --noEmit` before finishing any task.
-- **Testing Rule**: Whenever `src/lib/firebase.ts` or `src/components/Login.tsx` core logic changes, the corresponding test file (`src/test/firebase.test.ts` or `src/test/login.test.tsx`) must be updated in the same commit, and `npx vitest run` must be run before considering any task complete — not just `tsc` or `vite build`.
+- **Testing Rule**: Whenever `src/lib/dataClient.ts` or `src/components/Login.tsx` core logic changes, the corresponding test file (`src/test/dataClient.test.ts` or `src/test/login.test.tsx`) must be updated in the same commit, and `npx vitest run` must be run before considering any task complete — not just `tsc` or `vite build`.
 - **GitHub Push Rule**: নতুন কোনো আপডেট/কোড পরিবর্তন শেষ করার পর, সরাসরি পুশ না করে অবশ্যই ইউজারের কাছে পারমিশন চাইতে হবে এবং গিটহাব টোকেন (token) চাইতে হবে। নতুন একটি ব্রাঞ্চ (new branch) তৈরি করে সেই ব্রাঞ্চে কোড পুশ করতে হবে।
 
 ## Project Guidelines

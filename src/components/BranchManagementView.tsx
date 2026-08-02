@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Branch, BranchEnabledFeatures, BranchSharedFeatures } from '../types';
-import { db } from '../lib/firebase';
-import { collection, onSnapshot, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { subscribeToCollection, setDocById, updateDocById, deleteDocById } from '../lib/dataClient';
 import {
   Building,
   Plus,
@@ -121,55 +120,29 @@ export default function BranchManagementView({ currentUser, onBranchChange }: Br
   const [formFeatures, setFormFeatures] = useState<BranchEnabledFeatures>(DEFAULT_ENABLED_FEATURES);
   const [formShared, setFormShared] = useState<BranchSharedFeatures>(DEFAULT_SHARED_FEATURES);
 
-  // Subscribe to Firestore branches collection
+  // Subscribe to real-time branch updates
   useEffect(() => {
-    let unsubscribe = () => {};
-    try {
-      const branchesRef = collection(db, 'branches');
-      unsubscribe = onSnapshot(
-        branchesRef,
-        (snapshot) => {
-          if (!snapshot.empty) {
-            const list: Branch[] = [];
-            snapshot.forEach((docSnap) => {
-              list.push({ id: docSnap.id, ...docSnap.data() } as Branch);
-            });
-            // Ensure main branch is first
-            list.sort((a, b) => (b.isMainBranch ? 1 : 0) - (a.isMainBranch ? 1 : 0));
-            setBranches(list);
-          } else {
-            // Seed default initial branches to Firestore if empty
-            seedInitialBranches();
-          }
-          setLoading(false);
-        },
-        (error) => {
-          console.warn('Firestore branches realtime sync error, fallback to local default:', error);
-          const saved = localStorage.getItem('nexova_branches_v2');
-          if (saved) {
-            try { setBranches(JSON.parse(saved)); } catch (e) { setBranches(INITIAL_DEFAULT_BRANCHES); }
-          } else {
-            setBranches(INITIAL_DEFAULT_BRANCHES);
-          }
-          setLoading(false);
-        }
-      );
-    } catch (err) {
-      console.error('Error attaching branch listener:', err);
-      setBranches(INITIAL_DEFAULT_BRANCHES);
+    setLoading(true);
+    const unsubscribe = subscribeToCollection<Branch>('branches', (list) => {
+      if (list.length > 0) {
+        const sorted = [...list].sort((a, b) => (b.isMainBranch ? 1 : 0) - (a.isMainBranch ? 1 : 0));
+        setBranches(sorted);
+      } else {
+        seedInitialBranches();
+      }
       setLoading(false);
-    }
+    });
     return () => unsubscribe();
   }, []);
 
   const seedInitialBranches = async () => {
     try {
       for (const branch of INITIAL_DEFAULT_BRANCHES) {
-        await setDoc(doc(db, 'branches', branch.id), branch, { merge: true });
+        await setDocById('branches', branch.id, branch);
       }
       setBranches(INITIAL_DEFAULT_BRANCHES);
     } catch (e) {
-      console.warn('Could not seed initial branches to Firestore:', e);
+      console.warn('Could not seed initial branches:', e);
       setBranches(INITIAL_DEFAULT_BRANCHES);
     }
   };
@@ -233,7 +206,7 @@ export default function BranchManagementView({ currentUser, onBranchChange }: Br
         for (const b of branches) {
           if (b.id !== branchId && b.isMainBranch) {
             try {
-              await updateDoc(doc(db, 'branches', b.id), { isMainBranch: false });
+              await updateDocById('branches', b.id, { isMainBranch: false });
             } catch (e) {
               console.warn('Firestore update isMainBranch failed:', e);
             }
@@ -242,7 +215,7 @@ export default function BranchManagementView({ currentUser, onBranchChange }: Br
       }
 
       try {
-        await setDoc(doc(db, 'branches', branchId), newBranchData, { merge: true });
+        await setDocById('branches', branchId, newBranchData);
       } catch (e) {
         console.warn('Firestore setDoc branch failed, falling back to local persistence:', e);
       }
@@ -285,7 +258,7 @@ export default function BranchManagementView({ currentUser, onBranchChange }: Br
 
     try {
       try {
-        await deleteDoc(doc(db, 'branches', b.id));
+        await deleteDocById('branches', b.id);
       } catch (e) {
         console.warn('Firestore deleteDoc failed:', e);
       }
@@ -308,7 +281,7 @@ export default function BranchManagementView({ currentUser, onBranchChange }: Br
     const newStatus: 'Active' | 'Inactive' = b.status === 'Active' ? 'Inactive' : 'Active';
     try {
       try {
-        await updateDoc(doc(db, 'branches', b.id), { status: newStatus });
+        await updateDocById('branches', b.id, { status: newStatus });
       } catch (e) {
         console.warn('Firestore updateDoc status failed:', e);
       }

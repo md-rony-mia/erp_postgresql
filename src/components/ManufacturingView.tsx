@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 
 import PageStandardsWrapper from './PageStandardsWrapper';
-import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/firebase';
+import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/dataClient';
 import { Product, Transaction, AccountHead } from '../types';
 
 interface ManufacturingViewProps {

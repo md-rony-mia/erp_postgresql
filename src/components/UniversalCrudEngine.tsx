@@ -44,7 +44,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import MetadataFormEngine from './MetadataFormEngine';
-import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/firebase';
+import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/dataClient';
 
 // ==========================================
 // UNIVERSAL CRUD SCHEMAS & TYPES

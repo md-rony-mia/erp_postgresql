@@ -1,5 +1,4 @@
-import { collection, getDocs, query, limit } from 'firebase/firestore';
-import { db } from './firebase';
+import { fetchCollectionFromFirestore } from './dataClient.ts';
 import {
   Invoice,
   Product,
@@ -39,21 +38,6 @@ export async function fetchExecutiveDashboardData(
   }
 
   try {
-    const fetchCol = async <T>(colName: string, maxItems = 200): Promise<T[]> => {
-      try {
-        const q = query(collection(db, colName), limit(maxItems));
-        const snap = await getDocs(q);
-        const results: T[] = [];
-        snap.forEach((docSnap) => {
-          results.push({ id: docSnap.id, ...docSnap.data() } as T);
-        });
-        return results;
-      } catch (err) {
-        console.warn(`Firestore query failed for collection ${colName}:`, err);
-        return [];
-      }
-    };
-
     const [
       invoices,
       products,
@@ -66,16 +50,16 @@ export async function fetchExecutiveDashboardData(
       transactions,
       attendances,
     ] = await Promise.all([
-      fetchCol<Invoice>('invoices'),
-      fetchCol<Product>('products'),
-      fetchCol<Customer>('customers'),
-      fetchCol<Supplier>('suppliers'),
-      fetchCol<BankAccount>('bankAccounts'),
-      fetchCol<LoanAccount>('loanAccounts'),
-      fetchCol<Employee>('employees'),
-      fetchCol<PurchaseOrder>('purchaseOrders'),
-      fetchCol<Transaction>('transactions'),
-      fetchCol<Attendance>('attendances'),
+      fetchCollectionFromFirestore<Invoice>('invoices'),
+      fetchCollectionFromFirestore<Product>('products'),
+      fetchCollectionFromFirestore<Customer>('customers'),
+      fetchCollectionFromFirestore<Supplier>('suppliers'),
+      fetchCollectionFromFirestore<BankAccount>('bankAccounts'),
+      fetchCollectionFromFirestore<LoanAccount>('loanAccounts'),
+      fetchCollectionFromFirestore<Employee>('employees'),
+      fetchCollectionFromFirestore<PurchaseOrder>('purchaseOrders'),
+      fetchCollectionFromFirestore<Transaction>('transactions'),
+      fetchCollectionFromFirestore<Attendance>('attendances'),
     ]);
 
     const data: ExecutiveDashboardData = {
@@ -95,7 +79,7 @@ export async function fetchExecutiveDashboardData(
     cachedDashboardData = data;
     return data;
   } catch (error) {
-    console.error('Failed to query Firestore for executive dashboard:', error);
+    console.error('Failed to query executive dashboard data:', error);
     throw error;
   }
 }

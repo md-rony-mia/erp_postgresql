@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/firebase';
+import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/dataClient';
 import {
   Product,
   Invoice,
