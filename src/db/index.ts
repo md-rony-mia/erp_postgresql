@@ -15,6 +15,9 @@ export const createPool = () => {
       database: process.env.SQL_DB_NAME,
       max: 10,
       connectionTimeoutMillis: 15000,
+      ssl: process.env.SQL_HOST?.includes('neon.tech')
+        ? { rejectUnauthorized: false }
+        : undefined,
     });
 
     global._postgresPool.on('error', (err) => {
