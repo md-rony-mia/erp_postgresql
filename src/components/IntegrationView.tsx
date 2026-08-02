@@ -25,7 +25,7 @@ import {
   Database,
   ArrowUpRight
 } from 'lucide-react';
-import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/firebase';
+import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/dataClient';
 
 interface IntegrationViewProps {
   activeSubTab?: string;

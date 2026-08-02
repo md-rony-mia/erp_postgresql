@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { BankAccount, LoanAccount, Transaction, AppSettings } from '../types';
 import { navEngine, NavigationItem, NavigationGroup } from '../lib/navigationEngine';
-import { createNewUserWithSecondaryApp, db, auth } from '../lib/firebase';
+import {
+  createNewUserWithSecondaryApp,
+  auth,
+  deleteDocById,
+  queryCollectionWhere,
+  sendPasswordResetEmail,
+  updatePassword,
+} from '../lib/dataClient';
 import { fetchErrorLogsFromFirestore, clearErrorLogsFromFirestore, ErrorLogEntry } from '../lib/errorLogger';
 import BranchManagementView from './BranchManagementView';
-import { collection, query, where, getDocs, doc, deleteDoc } from 'firebase/firestore';
-import { sendPasswordResetEmail, updatePassword } from 'firebase/auth';
 import * as Icons from 'lucide-react';
 import {
   Landmark,
@@ -667,7 +672,7 @@ export default function BankingAndLoanView({
       try {
         // Firestore 'users' কালেকশন থেকে ডিলিট করার চেষ্টা করুন
         if (targetUser.id) {
-          await deleteDoc(doc(db, 'users', targetUser.id));
+          await deleteDocById('users', targetUser.id);
         }
       } catch (dbErr) {
         // Intentionally silent: non-critical firestore document deletion failure during user account deletion
@@ -687,19 +692,27 @@ export default function BankingAndLoanView({
   const handleSendResetPassword = async (email: string, name: string) => {
     if (!email) return;
     const confirmReset = window.confirm(
-      `আপনি কি নিশ্চিত যে আপনি "${name}" (${email}) এর জন্য পাসওয়ার্ড রিসেট করার লিঙ্ক পাঠাতে চান?\n\nThis will send a secure password reset email link from Firebase.`
+      `আপনি কি নিশ্চিত যে আপনি "${name}" (${email}) এর জন্য একটি নতুন পাসওয়ার্ড জেনারেট করতে চান?
+
+No email service is configured, so a temporary password will be generated and shown to you here instead of a reset link.`
     );
     if (!confirmReset) return;
 
     try {
-      await sendPasswordResetEmail(auth, email);
+      const { tempPassword } = await sendPasswordResetEmail(email);
       alert(
-        `পাসওয়ার্ড রিসেট লিঙ্ক সফলভাবে পাঠানো হয়েছে! অনুগ্রহ করে "${email}" এর ইনবক্স বা স্প্যাম ফোল্ডার চেক করুন।\n\nPassword reset link sent successfully to ${email}!`
+        `নতুন অস্থায়ী পাসওয়ার্ড: ${tempPassword}
+
+এই পাসওয়ার্ডটি "${email}" এর সাথে সরাসরি শেয়ার করুন এবং লগইনের পর পাসওয়ার্ড পরিবর্তন করতে বলুন।
+
+Temporary password: ${tempPassword} -- share this with ${name} securely; ask them to change it after logging in.`
       );
     } catch (err: any) {
       console.error("Password reset error:", err);
       alert(
-        `পাসওয়ার্ড রিসেট লিঙ্ক পাঠাতে ব্যর্থ হয়েছে: ${err.message || err}\n\nFailed to send reset email.`
+        `পাসওয়ার্ড রিসেট করতে ব্যর্থ হয়েছে: ${err.message || err}
+
+Failed to reset password.`
       );
     }
   };
@@ -760,7 +773,7 @@ export default function BankingAndLoanView({
           usersList: updated
         });
       }
-      alert(`Successfully registered Firebase Auth & Firestore account for ${newUserFullName}! / ${newUserFullName}-এর অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে!`);
+      alert(`Successfully registered account for ${newUserFullName}! / ${newUserFullName}-এর অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে!`);
     } catch (err: any) {
       console.error("In-app user creation error:", err);
       let errMsg = `Failed to create account: ${err.message || err} / অ্যাকাউন্ট তৈরি করতে সমস্যা হয়েছে: ${err.message || err}`;
@@ -771,23 +784,20 @@ export default function BankingAndLoanView({
         if (confirmLink) {
           try {
             setAddUserLoading(true);
-            // Search Firestore for existing user document to get real UID
-            const usersRef = collection(db, 'users');
-            const q = query(usersRef, where('email', '==', newUserEmail));
-            const qSnap = await getDocs(q);
+            // Search existing users for a matching email to recover the real id
+            const qSnap = await queryCollectionWhere<any>('users', 'email', newUserEmail);
             
             let existingUid = `imported-${Date.now()}`;
             let existingName = newUserFullName;
             let existingUsername = newUserUsername;
             let existingRole = newUserRole;
 
-            if (!qSnap.empty) {
-              const matchedDoc = qSnap.docs[0];
-              existingUid = matchedDoc.id;
-              const matchedData = matchedDoc.data();
-              if (matchedData.name) existingName = matchedData.name;
-              if (matchedData.username) existingUsername = matchedData.username;
-              if (matchedData.role) existingRole = matchedData.role;
+            if (qSnap.length > 0) {
+              const matchedDoc = qSnap[0];
+              existingUid = String(matchedDoc.id);
+              if (matchedDoc.name) existingName = matchedDoc.name;
+              if (matchedDoc.username) existingUsername = matchedDoc.username;
+              if (matchedDoc.role) existingRole = matchedDoc.role;
             }
 
             const initials = existingName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
@@ -5810,9 +5820,9 @@ export default function BankingAndLoanView({
 
               {/* Action 1: Reset Password Link */}
               <div className="space-y-2 border-b border-slate-100 pb-4">
-                <p className="font-bold text-slate-700 text-xs">অপশন ১: পাসওয়ার্ড রিসেট লিঙ্ক ইমেইল করুন</p>
+                <p className="font-bold text-slate-700 text-xs">অপশন ১: একটি অস্থায়ী পাসওয়ার্ড সেট করুন</p>
                 <p className="text-[10px] text-slate-400 leading-relaxed">
-                  এটি ব্যবহারকারীর নিবন্ধিত ইমেইলে একটি নিরাপদ পাসওয়ার্ড রিসেট লিংক পাঠাবে। ব্যবহারকারী সেই লিংকে ক্লিক করে নতুন পাসওয়ার্ড সেট করে নিতে পারবেন।
+                  একটি নতুন অস্থায়ী পাসওয়ার্ড শেনারেট করুন, তারপর ব্যবহারকারীকে সরাসরি জানিয়ে দিন। লগইনের পর সেটি পরিবর্তন করে নিতে বলুন।
                 </p>
                 <button
                   type="button"
@@ -5822,13 +5832,13 @@ export default function BankingAndLoanView({
                     setPasswordModalError(null);
                     setPasswordModalSuccess(null);
                     try {
-                      await sendPasswordResetEmail(auth, passwordModalUser.email);
+                      const { tempPassword } = await sendPasswordResetEmail(passwordModalUser.email);
                       setPasswordModalSuccess(
-                        `পাসওয়ার্ড রিসেট লিঙ্কটি সফলভাবে পাঠানো হয়েছে! অনুগ্রহ করে "${passwordModalUser.email}" এর ইনবক্স বা স্প্যাম ফোল্ডার চেক করুন।`
+                        `নতুন অস্থায়ী পাসওয়ার্ড: ${tempPassword} -- এটি "${passwordModalUser.email}" এর সাথে সরাসরি শেয়ার করুন।`
                       );
                     } catch (err: any) {
                       console.error("Reset password link error:", err);
-                      const msg = `লিঙ্ক পাঠাতে ব্যর্থ হয়েছে: ${err.message || err}. (নোট: আপনার ফায়ারবেস অথেনটিকেশন ডোমেন বা কনফিগারেশন সঠিক আছে কিনা চেক করুন)`;
+                      const msg = `পাসওয়ার্ড রিসেট করতে ব্যর্থ হয়েছে: ${err.message || err}`;
                       setPasswordModalError(msg);
                       alert(msg);
                     } finally {
@@ -5876,7 +5886,7 @@ export default function BankingAndLoanView({
                           try {
                             const user = auth.currentUser;
                             if (user) {
-                              await updatePassword(user, newPasswordInput);
+                              await updatePassword(newPasswordInput);
                               setPasswordModalSuccess('আপনার পাসওয়ার্ডটি সফলভাবে পরিবর্তন করা হয়েছে!');
                               setNewPasswordInput('');
                             } else {

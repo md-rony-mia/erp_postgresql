@@ -18,7 +18,7 @@ import {
   FileText
 } from 'lucide-react';
 import PageStandardsWrapper from './PageStandardsWrapper';
-import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/firebase';
+import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/dataClient';
 
 interface ServiceViewProps {
   activeSubTab?: string;

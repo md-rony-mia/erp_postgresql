@@ -3,13 +3,24 @@ import path from "path";
 import dotenv from "dotenv";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
+import { apiRouter } from "./src/server/routes.ts";
+import { setupRealtime } from "./src/server/realtime.ts";
 
 dotenv.config();
+
+// Defense-in-depth: every async route is wrapped (see src/server/routes.ts), but this
+// keeps a stray unhandled rejection anywhere else from taking the whole process down.
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled promise rejection:', reason);
+});
 
 const app = express();
 const PORT = 3000;
 
 app.use(express.json());
+
+// Postgres-backed data/auth/branch-stock/error-log API (replaces Firestore)
+app.use("/api", apiRouter);
 
 // Initialize Gemini SDK with telemetry header
 const ai = new GoogleGenAI({
@@ -87,9 +98,10 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
+  const httpServer = app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
+  setupRealtime(httpServer);
 }
 
 startServer();

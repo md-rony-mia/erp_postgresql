@@ -47,7 +47,7 @@ To run this application locally, you need:
 - **Backend / API Proxy**: Node.js Express (`server.ts`) & Vercel Serverless Functions (`api/`)
 - **Tooling**: Vite
 - **Libraries**: Lucide React (Icons), Recharts (Data Visualization), XLSX (Excel Export)
-- **Database**: Cloud-persisted Firestore integration for durable multi-user state synchronization.
+- **Database**: PostgreSQL (Cloud SQL) via Drizzle ORM, with JWT-based auth and a WebSocket layer for real-time multi-user sync (replaces the previous Firestore backend).
 
 ## Deployment
 

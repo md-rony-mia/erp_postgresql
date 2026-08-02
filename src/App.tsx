@@ -57,13 +57,10 @@ import {
   subscribeToCollection,
   saveSettingsToFirestore,
   syncCollectionToFirestore,
-  db,
   onAuthStateChange,
   signOutUser,
-  isFirebaseConfigured,
   Unsubscribe,
-} from './lib/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+} from './lib/dataClient';
 
 import {
   Product,
@@ -178,45 +175,13 @@ function AppContent() {
   }, []);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChange(async (fbUser) => {
-      if (fbUser) {
-        let profileFound = false;
-        if (isFirebaseConfigured) {
-          try {
-            const userDocRef = doc(db, 'users', fbUser.uid);
-            const userDocSnap = await getDoc(userDocRef);
-            if (userDocSnap.exists()) {
-              const profile = userDocSnap.data();
-              setCurrentUser(profile);
-              localStorage.setItem('nexova_current_user', JSON.stringify(profile));
-              profileFound = true;
-            }
-          } catch (err) {
-            console.warn("Firestore user profile fetch notice:", err);
-          }
-        }
-        if (!profileFound) {
-          const stored = localStorage.getItem('nexova_current_user');
-          if (stored) {
-            try {
-              setCurrentUser(JSON.parse(stored));
-            } catch (e) {
-              console.warn("Invalid local user json:", e);
-            }
-          }
-        }
+    const unsubscribe = onAuthStateChange((profile) => {
+      if (profile) {
+        setCurrentUser(profile);
+        localStorage.setItem('nexova_current_user', JSON.stringify(profile));
       } else {
-        const stored = localStorage.getItem('nexova_current_user');
-        if (!isFirebaseConfigured && stored) {
-          try {
-            setCurrentUser(JSON.parse(stored));
-          } catch (e) {
-            setCurrentUser(null);
-          }
-        } else {
-          setCurrentUser(null);
-          localStorage.removeItem('nexova_current_user');
-        }
+        setCurrentUser(null);
+        localStorage.removeItem('nexova_current_user');
       }
       setAuthChecked(true);
     });
