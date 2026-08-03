@@ -1457,7 +1457,7 @@ function AppContent() {
           return (
             <main className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 pb-20">
               {/* Scheduled Backup Reminder Banner for Administrator */}
-              {isBackupOverdue && (
+              {/* {isBackupOverdue && (
                 <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3 px-4 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900 shadow-xs animate-in fade-in">
                   <div className="flex items-center gap-2.5">
                     <div className="p-1.5 bg-amber-100 text-amber-700 rounded-lg shrink-0">
@@ -1484,7 +1484,7 @@ function AppContent() {
                     </button>
                   </div>
                 </div>
-              )}
+              )} */}
 
               {/* DEFAULT DESKTOP WORKSPACE (EXECUTIVE DASHBOARD) WHEN ALL WINDOWS ARE MINIMIZED */}
               {!hasActiveUnminimizedWindow && (

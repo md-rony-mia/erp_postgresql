@@ -281,14 +281,14 @@ export default function Taskbar({ currentUser }: TaskbarProps) {
           </div>
 
           {/* System Time & Date */}
-          <div className="flex flex-col items-end px-2 py-0.5 bg-slate-900/90 border border-slate-800 rounded-xl text-right">
+          {/* <div className="flex flex-col items-end px-2 py-0.5 bg-slate-900/90 border border-slate-800 rounded-xl text-right">
             <span className="text-[11px] font-bold text-slate-200 leading-none font-mono">
               {timeString || '00:00'}
             </span>
             <span className="text-[9px] text-slate-400 leading-none mt-0.5 font-mono">
               {dateString}
             </span>
-          </div>
+          </div> */}
         </div>
       </nav>
     </>
