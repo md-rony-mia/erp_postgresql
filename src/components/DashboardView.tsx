@@ -837,6 +837,7 @@ export default function DashboardView({
         products={products}
         suppliers={suppliers}
         customers={customers}
+        transactions={transactions}
         onTabChange={onTabChange}
       />
     );

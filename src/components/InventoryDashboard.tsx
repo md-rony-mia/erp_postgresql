@@ -32,7 +32,8 @@ import {
   AreaChart,
   Area,
   LineChart,
-  Line
+  Line,
+  Cell
 } from 'recharts';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -60,114 +61,102 @@ export default function InventoryDashboard({
   invoices,
   onTabChange
 }: InventoryDashboardProps) {
-  const [selectedYear, setSelectedYear] = useState('2026');
-  const [selectedChartYear, setSelectedChartYear] = useState('2026');
   const [showExportSuccess, setShowExportSuccess] = useState(false);
   const [showAddInventoryModal, setShowAddInventoryModal] = useState(false);
 
-  // Check if there is actual ERP user data populated
-  const hasData = products.length > 0 || suppliers.length > 0 || invoices.length > 0 || customers.length > 0;
+  // ---- Real, derived-from-data calculations only (no hardcoded placeholder numbers) ----
 
-  // Dynamic derivations from real system products
-  const realTotalStock = products.reduce((sum, p) => sum + p.stock, 0);
-  const realInventoryValue = products.reduce((sum, p) => sum + p.stock * p.cost, 0);
+  const totalStockVal = products.reduce((sum, p) => sum + p.stock, 0);
+  const inventoryValueVal = products.reduce((sum, p) => sum + p.stock * p.cost, 0);
 
-  // High-fidelity fallback / hybrid stats to match exact screenshot layout with dynamic backing
-  const totalStockVal = realTotalStock > 0 ? realTotalStock : (hasData ? 250 : 0);
-  const inventoryValueVal = realInventoryValue > 0 ? realInventoryValue : (hasData ? 2300 : 0);
+  // No stock-over-time snapshots are tracked, so there's no real history for a sparkline —
+  // show a flat line at the current value instead of inventing a trend.
+  const totalStockSparkData = [{ value: totalStockVal }, { value: totalStockVal }];
+  const inventoryValueSparkData = [{ value: inventoryValueVal }, { value: inventoryValueVal }];
 
-  // Sparkline data for cards
-  const totalStockSparkData = hasData ? [
-    { value: 120 }, { value: 140 }, { value: 135 }, { value: 180 }, { value: 165 }, 
-    { value: 210 }, { value: 190 }, { value: 230 }, { value: 215 }, { value: 250 }
-  ] : [];
+  // Category Distribution: real product count per category.
+  const countByCategory = new Map<string, number>();
+  for (const p of products) {
+    const cat = p.category || 'Uncategorized';
+    countByCategory.set(cat, (countByCategory.get(cat) || 0) + 1);
+  }
+  const categoryDistributionData = Array.from(countByCategory.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([category, count]) => ({ category, count }));
 
-  const inventoryValueSparkData = hasData ? [
-    { value: 1800 }, { value: 2100 }, { value: 1600 }, { value: 2400 }, { value: 1950 }, 
-    { value: 2200 }, { value: 1500 }, { value: 2350 }, { value: 1700 }, { value: 2300 }
-  ] : [];
-
-  // Middle Row charts
-  const categoryDistributionData = hasData ? [
-    { category: 'Electronics', count: 110 },
-    { category: 'Clothing', count: 95 },
-    { category: 'Machines', count: 80 },
-    { category: 'Sports', count: 65 },
-    { category: 'Bikes', count: 50 },
-    { category: 'Books', count: 40 },
-  ] : [];
-
-  const productStockLevelsData = hasData ? [
-    { month: 'Jan', 'Total Products': 180, 'Out of Stock': 20 },
-    { month: 'Feb', 'Total Products': 210, 'Out of Stock': 25 },
-    { month: 'Mar', 'Total Products': 195, 'Out of Stock': 15 },
-    { month: 'Apr', 'Total Products': 240, 'Out of Stock': 18 },
-    { month: 'May', 'Total Products': 450, 'Out of Stock': 40 },
-    { month: 'Jun', 'Total Products': 280, 'Out of Stock': 28 },
-    { month: 'Jul', 'Total Products': 260, 'Out of Stock': 22 },
-    { month: 'Aug', 'Total Products': 310, 'Out of Stock': 30 },
-    { month: 'Sep', 'Total Products': 340, 'Out of Stock': 35 },
-    { month: 'Oct', 'Total Products': 320, 'Out of Stock': 24 },
-    { month: 'Nov', 'Total Products': 300, 'Out of Stock': 20 },
-    { month: 'Dec', 'Total Products': 350, 'Out of Stock': 18 },
-  ] : [];
-
-  const fullInventoryValueTrend = hasData ? [
-    { label: 'Mar', value: 360 },
-    { label: 'Apr', value: 480 },
-    { label: 'May', value: 560 }
-  ] : [];
-
-  // High-fidelity supplier lists matching user's screenshot
-  const screenshotSuppliers = [
-    { id: '#SUP0020', name: 'Apex Computers', supplied: 40000, status: 'Active' },
-    { id: '#SUP0019', name: 'Beats Headphones', supplied: 34000, status: 'Inactive' },
-    { id: '#SUP0018', name: 'Dazzle Shoes', supplied: 32000, status: 'Active' },
-    { id: '#SUP0017', name: 'Best Accessories', supplied: 27000, status: 'Active' },
-    { id: '#SUP0016', name: 'A-Z Store', supplied: 13000, status: 'Inactive' }
+  // Stock health breakdown (replaces a previous fake 12-month "Product Stock Levels"
+  // trend that had no underlying historical data). Uses each product's real alertQty
+  // (reorder threshold) to classify current stock status.
+  const stockHealth = { 'In Stock': 0, 'Low Stock': 0, 'Out of Stock': 0 };
+  for (const p of products) {
+    if (p.stock <= 0) stockHealth['Out of Stock']++;
+    else if (p.alertQty && p.stock <= p.alertQty) stockHealth['Low Stock']++;
+    else stockHealth['In Stock']++;
+  }
+  const stockHealthData = [
+    { status: 'In Stock', count: stockHealth['In Stock'] },
+    { status: 'Low Stock', count: stockHealth['Low Stock'] },
+    { status: 'Out of Stock', count: stockHealth['Out of Stock'] },
   ];
 
-  const displayedSuppliers = suppliers.length > 0 
-    ? suppliers.slice(0, 5).map((sup, idx) => ({
-        id: sup.id || `#SUP0${16 + idx}`,
-        name: sup.name,
-        supplied: sup.outstandingBalance > 0 ? sup.outstandingBalance : (40000 - idx * 6000),
-        status: idx % 2 === 0 ? 'Active' : 'Inactive'
-      }))
-    : (hasData ? screenshotSuppliers : []);
+  // Inventory value by category (real) — fills the big full-width chart slot that
+  // previously showed a fabricated 3-month value trend with no real history behind it.
+  const valueByCategory = new Map<string, number>();
+  for (const p of products) {
+    const cat = p.category || 'Uncategorized';
+    valueByCategory.set(cat, (valueByCategory.get(cat) || 0) + p.stock * p.cost);
+  }
+  const inventoryValueByCategoryData = Array.from(valueByCategory.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([label, value]) => ({ label, value: Math.round(value) }));
 
-  // High-fidelity Warehouse lists matching user's screenshot
-  const displayedWarehouses = hasData ? [
-    { id: '#WHR0020', name: 'Smart Stock Hub', manager: 'Ethan Walker', capacity: 30000, percentage: 85, color: '#10b981' },
-    { id: '#WHR0019', name: 'Flow Grid Storage', manager: 'Madison Clark', capacity: 20000, percentage: 70, color: '#f97316' },
-    { id: '#WHR0018', name: 'Prime Storage Solutions', manager: 'James Harris', capacity: 300000, percentage: 61, color: '#eab308' },
-    { id: '#WHR0017', name: 'Global Supply Depot', manager: 'Avery Thompson', capacity: 25000, percentage: 40, color: '#06b6d4' },
-    { id: '#WHR0015', name: 'Silverline Storage', manager: 'Benjamin Wright', capacity: 16000, percentage: 22, color: '#ef4444' }
-  ] : [];
+  // Real suppliers only — outstandingBalance is what's actually owed to them; there's
+  // no Active/Inactive status tracked, so `group` (a real field) is shown instead.
+  const displayedSuppliers = suppliers.slice(0, 6).map((sup) => ({
+    id: sup.id,
+    name: sup.name,
+    outstandingBalance: sup.outstandingBalance || 0,
+    group: sup.group || '—',
+  }));
 
-  // High-fidelity Recent Stocks products matching user's screenshot
-  const screenshotRecentStocks = [
-    { code: '#PRD0020', name: 'Apple iPhone 15', sku: 'APP-PH-15', category: 'Smartphones', brand: 'Apple', unit: 'Piece', qty: 2, sellPrice: 250, purchasePrice: 230, status: 'In Stock' },
-    { code: '#PRD0019', name: 'Dell XPS 13 9310', sku: 'DEL-LAP-9310', category: 'Computers', brand: 'Dell', unit: 'Piece', qty: 12, sellPrice: 300, purchasePrice: 280, status: 'In Stock' },
-    { code: '#PRD0018', name: 'Bose QuietComfort 45', sku: 'BOS-HD-45', category: 'Headphones', brand: 'Bose', unit: 'Piece', qty: 15, sellPrice: 100, purchasePrice: 80, status: 'In Stock' },
-    { code: '#PRD0017', name: 'Adidas Running Shoe', sku: 'ADI-SHO-RUN', category: 'Footwear', brand: 'Adidas', unit: 'Pack', qty: 20, sellPrice: 400, purchasePrice: 380, status: 'In Stock' },
-    { code: '#PRD0016', name: 'Dyson Vacuum Cleaner', sku: 'DYS-VC-100', category: 'Appliances', brand: 'Dyson', unit: 'Piece', qty: 8, sellPrice: 750, purchasePrice: 730, status: 'Out of Stock' }
-  ];
+  // Warehouses: derived from each product's real `warehouse` field (SKU count + stock
+  // value per warehouse). No manager names or capacity figures are tracked anywhere in
+  // the system, so those are not shown — the percentage is each warehouse's real share
+  // of total inventory value.
+  const warehouseAgg = new Map<string, { skuCount: number; value: number }>();
+  for (const p of products) {
+    const wh = p.warehouse || 'Unassigned';
+    const entry = warehouseAgg.get(wh) || { skuCount: 0, value: 0 };
+    entry.skuCount += 1;
+    entry.value += p.stock * p.cost;
+    warehouseAgg.set(wh, entry);
+  }
+  const warehousePalette = [COLORS.emerald, COLORS.orange, COLORS.amber, COLORS.blue, COLORS.purple];
+  const displayedWarehouses = Array.from(warehouseAgg.entries())
+    .sort((a, b) => b[1].value - a[1].value)
+    .slice(0, 6)
+    .map(([name, agg], idx) => ({
+      name,
+      skuCount: agg.skuCount,
+      value: agg.value,
+      percentage: inventoryValueVal > 0 ? Math.round((agg.value / inventoryValueVal) * 100) : 0,
+      color: warehousePalette[idx % warehousePalette.length],
+    }));
 
-  const displayedRecentStocks = products.length > 0
-    ? products.slice(-5).reverse().map((p, idx) => ({
-        code: p.sku || `#PRD0${20 - idx}`,
-        name: p.name,
-        sku: p.sku || `SKU-${idx}`,
-        category: p.category || 'General',
-        brand: 'Generic',
-        unit: p.unit || 'Piece',
-        qty: p.stock,
-        sellPrice: p.price,
-        purchasePrice: p.cost,
-        status: p.stock > 0 ? 'In Stock' : 'Out of Stock'
-      }))
-    : (hasData ? screenshotRecentStocks : []);
+  // Recent stocks — real products only (most recently added, last 6).
+  const displayedRecentStocks = products.slice(-6).reverse().map((p) => ({
+    code: p.sku || p.id,
+    name: p.name,
+    sku: p.sku || '—',
+    category: p.category || 'General',
+    unit: p.unit || 'Piece',
+    qty: p.stock,
+    sellPrice: p.price,
+    purchasePrice: p.cost,
+    status: p.stock <= 0 ? 'Out of Stock' : (p.alertQty && p.stock <= p.alertQty) ? 'Low Stock' : 'In Stock'
+  }));
 
   const triggerExport = () => {
     setShowExportSuccess(true);
@@ -316,24 +305,17 @@ export default function InventoryDashboard({
               <p className="text-[11px] text-slate-400 font-medium mt-0.5">Top inventory stock categories</p>
             </div>
 
-            <div className="relative">
-              <select 
-                value={selectedChartYear}
-                onChange={(e) => setSelectedChartYear(e.target.value)}
-                className="appearance-none bg-[#0f111a] hover:bg-slate-800/60 text-[11px] font-extrabold text-slate-300 pl-3 pr-8 py-1.5 rounded-lg border border-slate-800 outline-none cursor-pointer"
-              >
-                <option value="2026">2026</option>
-                <option value="2025">2025</option>
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-500 pointer-events-none" />
-            </div>
+            <div className="text-[11px] font-extrabold text-slate-500 font-mono">All Products</div>
           </div>
 
           <div className="h-56 w-full font-sans">
+            {categoryDistributionData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-[11px] text-slate-500 font-mono">কোনো পণ্য যোগ করা হয়নি</div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart layout="vertical" data={categoryDistributionData} margin={{ top: 5, right: 20, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#222533" horizontal={false} />
-                <XAxis type="number" stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
+                <XAxis type="number" stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} allowDecimals={false} />
                 <YAxis dataKey="category" type="category" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} width={80} />
                 <Tooltip
                   content={({ active, payload }) => {
@@ -351,10 +333,11 @@ export default function InventoryDashboard({
                 <Bar dataKey="count" fill="#10b981" radius={[0, 4, 4, 0]} barSize={10} />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
 
-          <div className="text-[10px] text-emerald-400 font-black tracking-wide mt-2">
-            ● No of Products increased by +20% from last Week
+          <div className="text-[10px] text-slate-500 font-bold tracking-wide mt-2">
+            মোট {products.length}টি পণ্য, {countByCategory.size}টি ক্যাটাগরিতে
           </div>
         </div>
 
@@ -362,56 +345,56 @@ export default function InventoryDashboard({
         <div className="lg:col-span-1 bg-[#161923] border border-slate-800/80 rounded-[1.75rem] p-6 shadow-lg flex flex-col justify-between">
           <div className="flex justify-between items-center mb-4">
             <div>
-              <h3 className="text-sm font-black font-display text-white tracking-wide uppercase">Product Stock Levels</h3>
-              <p className="text-[11px] text-slate-400 font-medium mt-0.5">Operating levels monthly</p>
+              <h3 className="text-sm font-black font-display text-white tracking-wide uppercase">Stock Health</h3>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">Current stock status across all products</p>
             </div>
 
-            <div className="relative">
-              <select 
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="appearance-none bg-[#0f111a] hover:bg-slate-800/60 text-[11px] font-extrabold text-slate-300 pl-3 pr-8 py-1.5 rounded-lg border border-slate-800 outline-none cursor-pointer"
-              >
-                <option value="2026">2026</option>
-                <option value="2025">2025</option>
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-500 pointer-events-none" />
-            </div>
+            <div className="text-[11px] font-extrabold text-slate-500 font-mono">Right Now</div>
           </div>
 
           <div className="h-56 w-full font-sans">
+            {products.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-[11px] text-slate-500 font-mono">কোনো পণ্য নেই</div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={productStockLevelsData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
+              <BarChart data={stockHealthData} margin={{ top: 10, right: 0, left: -25, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#222533" vertical={false} />
-                <XAxis dataKey="month" stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
-                <YAxis stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
+                <XAxis dataKey="status" stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} />
+                <YAxis stroke="#64748b" fontSize={9} tickLine={false} axisLine={false} allowDecimals={false} />
                 <Tooltip
                   content={({ active, payload }) => {
                     if (active && payload && payload.length) {
                       return (
                         <div className="bg-[#0b0c10] border border-slate-800 p-2.5 rounded-xl text-[11px] shadow-2xl text-slate-300">
-                          <p className="font-extrabold text-slate-400 mb-1">{payload[0].payload.month}</p>
-                          <p className="text-[#10b981]">Total: {payload[0].value}</p>
-                          <p className="text-[#f97316]">Out of Stock: {payload[1].value}</p>
+                          <p className="font-extrabold text-slate-400 mb-1">{payload[0].payload.status}</p>
+                          <p className="text-[#10b981]">Products: {payload[0].value}</p>
                         </div>
                       );
                     }
                     return null;
                   }}
                 />
-                <Bar dataKey="Total Products" fill="#10b981" opacity={0.8} radius={[2, 2, 0, 0]} barSize={10} />
-                <Bar dataKey="Out of Stock" fill="#f97316" radius={[2, 2, 0, 0]} barSize={10} />
+                <Bar dataKey="count" radius={[2, 2, 0, 0]} barSize={24}>
+                  {stockHealthData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.status === 'In Stock' ? '#10b981' : entry.status === 'Low Stock' ? '#f59e0b' : '#ef4444'} />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           <div className="flex gap-3 justify-center items-center text-[9px] font-bold mt-2">
             <div className="flex items-center gap-1">
               <span className="h-2 w-2 rounded-full bg-[#10b981]"></span>
-              <span className="text-slate-400">Total Products</span>
+              <span className="text-slate-400">In Stock</span>
             </div>
             <div className="flex items-center gap-1">
-              <span className="h-2 w-2 rounded-full bg-[#f97316]"></span>
+              <span className="h-2 w-2 rounded-full bg-[#f59e0b]"></span>
+              <span className="text-slate-400">Low Stock</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="h-2 w-2 rounded-full bg-[#ef4444]"></span>
               <span className="text-slate-400">Out Of Stock</span>
             </div>
           </div>
@@ -458,15 +441,11 @@ export default function InventoryDashboard({
 
                   <div className="text-right flex items-center gap-6">
                     <div>
-                      <span className="text-[9px] text-slate-500 font-bold block uppercase tracking-wider">Goods Supplied</span>
-                      <span className="text-xs font-black text-slate-100 block mt-0.5">${sup.supplied.toLocaleString()}</span>
+                      <span className="text-[9px] text-slate-500 font-bold block uppercase tracking-wider">Outstanding Balance</span>
+                      <span className="text-xs font-black text-slate-100 block mt-0.5">${sup.outstandingBalance.toLocaleString()}</span>
                     </div>
-                    <span className={`inline-block px-3 py-0.5 text-[9px] font-black rounded-full border ${
-                      sup.status === 'Active' 
-                        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
-                        : 'bg-slate-800/50 text-slate-500 border-slate-800'
-                    }`}>
-                      {sup.status}
+                    <span className="inline-block px-3 py-0.5 text-[9px] font-black rounded-full border bg-slate-800/50 text-slate-400 border-slate-800">
+                      {sup.group}
                     </span>
                   </div>
                 </div>
@@ -505,21 +484,17 @@ export default function InventoryDashboard({
                     </div>
                     <div>
                       <span className="text-xs font-black text-slate-100 block">{wh.name}</span>
-                      <span className="text-[10px] text-slate-500 font-mono mt-0.5">{wh.id}</span>
+                      <span className="text-[10px] text-slate-500 font-mono mt-0.5">{wh.skuCount} SKU</span>
                     </div>
                   </div>
 
                   <div className="text-right flex items-center gap-6">
-                    <div className="text-left hidden sm:block">
-                      <span className="text-[9px] text-slate-500 font-bold block uppercase tracking-wider">Contact Person</span>
-                      <span className="text-xs font-black text-slate-200 block mt-0.5">{wh.manager}</span>
-                    </div>
                     <div className="text-left">
-                      <span className="text-[9px] text-slate-500 font-bold block uppercase tracking-wider">Capacity</span>
-                      <span className="text-xs font-black text-slate-100 block mt-0.5">{wh.capacity.toLocaleString()}</span>
+                      <span className="text-[9px] text-slate-500 font-bold block uppercase tracking-wider">Stock Value</span>
+                      <span className="text-xs font-black text-slate-100 block mt-0.5">${wh.value.toLocaleString()}</span>
                     </div>
-                    
-                    {/* Circle progress indicator on right matching the layout */}
+
+                    {/* Circle progress indicator: this warehouse's real share of total inventory value */}
                     <div className="relative h-10 w-10 shrink-0">
                       <svg className="w-full h-full transform -rotate-90" viewBox="0 0 36 36">
                         <path className="text-slate-800" strokeWidth="3" stroke="currentColor" fill="none" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
@@ -538,55 +513,50 @@ export default function InventoryDashboard({
 
       </div>
 
-      {/* Row 3: Huge Full-width Inventory Value trend chart */}
+      {/* Row 3: Huge Full-width Inventory Value by Category chart (real — replaces a
+           previous 3-point "trend" that had no actual historical data behind it; the
+           system doesn't record stock-value snapshots over time) */}
       <div className="bg-[#161923] border border-slate-800/80 rounded-[1.75rem] p-6 shadow-lg relative z-10">
         <div className="flex justify-between items-center mb-5">
           <div>
-            <h3 className="text-sm font-black font-display text-white tracking-wide uppercase">Inventory Value</h3>
-            <p className="text-[11px] text-slate-400 font-medium mt-0.5">Capital lock-up valuation over major operating semesters</p>
+            <h3 className="text-sm font-black font-display text-white tracking-wide uppercase">Inventory Value by Category</h3>
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">Current stock valuation (stock × cost) across categories</p>
           </div>
-
-          <div className="relative">
-            <select 
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="appearance-none bg-[#0f111a] hover:bg-slate-800/60 text-[11px] font-extrabold text-slate-300 pl-3 pr-8 py-1.5 rounded-lg border border-slate-800 outline-none cursor-pointer"
-            >
-              <option value="2026">2026</option>
-              <option value="2025">2025</option>
-            </select>
-            <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-500 pointer-events-none" />
-          </div>
+          <div className="text-[11px] font-extrabold text-slate-500 font-mono">Right Now</div>
         </div>
 
         <div className="h-64 w-full font-sans">
+          {inventoryValueByCategoryData.length === 0 ? (
+            <div className="h-full flex items-center justify-center text-[11px] text-slate-500 font-mono">কোনো ডাটা নেই</div>
+          ) : (
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={fullInventoryValueTrend} margin={{ top: 10, right: 10, left: -25, bottom: 0 }}>
+            <BarChart data={inventoryValueByCategoryData} margin={{ top: 10, right: 10, left: -15, bottom: 0 }}>
               <defs>
                 <linearGradient id="colorBigVal" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.15}/>
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.9}/>
+                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.4}/>
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#222533" vertical={false} />
               <XAxis dataKey="label" stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
-              <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} />
+              <YAxis stroke="#64748b" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v / 1000}k`} />
               <Tooltip
                 content={({ active, payload }) => {
                   if (active && payload && payload.length) {
                     return (
                       <div className="bg-[#0b0c10] border border-slate-800 p-3 rounded-xl text-xs shadow-2xl text-slate-300">
                         <p className="font-extrabold text-slate-400 mb-1">{payload[0].payload.label}</p>
-                        <p className="font-black text-[#10b981]">Total Valuation: ${payload[0].value}</p>
+                        <p className="font-black text-[#10b981]">Valuation: ${Number(payload[0].value).toLocaleString()}</p>
                       </div>
                     );
                   }
                   return null;
                 }}
               />
-              <Area type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2.5} fillOpacity={1} fill="url(#colorBigVal)" />
-            </AreaChart>
+              <Bar dataKey="value" fill="url(#colorBigVal)" radius={[6, 6, 0, 0]} barSize={40} />
+            </BarChart>
           </ResponsiveContainer>
+          )}
         </div>
       </div>
 
@@ -615,7 +585,6 @@ export default function InventoryDashboard({
                 <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Product</th>
                 <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">SKU</th>
                 <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Category</th>
-                <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Brand</th>
                 <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Unit</th>
                 <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Quantity</th>
                 <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Selling Price</th>
@@ -626,7 +595,7 @@ export default function InventoryDashboard({
             <tbody className="divide-y divide-slate-800/50">
               {displayedRecentStocks.length === 0 ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-slate-500 text-xs">
+                  <td colSpan={9} className="py-12 text-center text-slate-500 text-xs">
                     কোনো স্টক বা পণ্যের বিবরণ পাওয়া যায়নি (No stocks or products available)
                   </td>
                 </tr>
@@ -648,15 +617,16 @@ export default function InventoryDashboard({
                         {row.category}
                       </span>
                     </td>
-                    <td className="px-4.5 py-3.5 text-xs text-slate-300 font-medium">{row.brand}</td>
                     <td className="px-4.5 py-3.5 text-xs text-slate-400 font-mono">{row.unit}</td>
                     <td className="px-4.5 py-3.5 text-xs font-black text-slate-100">{row.qty.toString().padStart(2, '0')}</td>
                     <td className="px-4.5 py-3.5 text-xs font-black text-emerald-400">${row.sellPrice}</td>
                     <td className="px-4.5 py-3.5 text-xs font-mono font-bold text-slate-400">${row.purchasePrice}</td>
                     <td className="px-4.5 py-3.5 text-xs">
                       <span className={`inline-block px-2.5 py-0.5 text-[9px] font-black rounded border ${
-                        row.status === 'In Stock' 
-                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                        row.status === 'In Stock'
+                          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+                          : row.status === 'Low Stock'
+                          ? 'bg-amber-500/10 text-amber-400 border-amber-500/20'
                           : 'bg-rose-500/10 text-rose-400 border-rose-500/20'
                       }`}>
                         {row.status}
