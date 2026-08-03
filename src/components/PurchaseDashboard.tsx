@@ -76,123 +76,166 @@ export default function PurchaseDashboard({
   onTabChange
 }: PurchaseDashboardProps) {
   const [showExportSuccess, setShowExportSuccess] = useState(false);
-  const [selectedYear, setSelectedYear] = useState('2026');
-  const [selectedMonth, setSelectedMonth] = useState('January');
 
-  // Check if there is actual ERP user data populated
-  const hasData = purchaseOrders.length > 0 || products.length > 0 || suppliers.length > 0;
+  const hasData = purchaseOrders.length > 0;
 
-  // Real system calculations
-  const realTotalSpend = purchaseOrders
-    .filter(po => po.status === 'Received')
-    .reduce((sum, po) => sum + po.total, 0);
+  // ---- Real, derived-from-data calculations only (no hardcoded placeholder numbers) ----
 
-  const realTotalOrders = purchaseOrders.length;
-  const realAvgPOValue = realTotalOrders > 0 ? Math.round(realTotalSpend / realTotalOrders) : 0;
+  const receivedOrders = purchaseOrders.filter(po => po.status === 'Received');
+  const totalSpendVal = receivedOrders.reduce((sum, po) => sum + po.total, 0);
+  const purchaseOrdersCount = purchaseOrders.length;
+  const avgPOValueVal = purchaseOrdersCount > 0 ? Math.round(purchaseOrders.reduce((s, po) => s + po.total, 0) / purchaseOrdersCount) : 0;
 
-  // Dashboard fallback/hybrid values to match the user's high-fidelity screenshot
-  const totalSpendVal = realTotalSpend > 0 ? realTotalSpend : (hasData ? 2145 : 124500);
-  const purchaseOrdersCount = realTotalOrders > 0 ? realTotalOrders : (hasData ? 128 : 128);
-  const deliveryRate = hasData ? 92 : 88; // %
-  const avgPOValueVal = realAvgPOValue > 0 ? realAvgPOValue : (hasData ? 600 : 600);
+  // "On Time Delivery" isn't trackable — the data model has no expected/actual delivery
+  // date. The closest real, honest metric: what share of placed orders have actually
+  // been received (vs still outstanding or cancelled).
+  const receivedRate = purchaseOrdersCount > 0 ? Math.round((receivedOrders.length / purchaseOrdersCount) * 100) : 0;
 
-  // Sparklines data matching card aesthetics
-  const totalSpendSpark = [
-    { value: 1800 }, { value: 1900 }, { value: 1750 }, { value: 2100 }, { value: 1950 }, 
-    { value: 2200 }, { value: 2050 }, { value: 2300 }, { value: 2100 }, { value: totalSpendVal / (hasData ? 1 : 50) }
-  ];
+  const productCategoryById = new Map(products.map(p => [p.id, p.category || 'Uncategorized']));
 
-  const poCountSpark = [
-    { value: 100 }, { value: 115 }, { value: 110 }, { value: 125 }, { value: 120 },
-    { value: 135 }, { value: 130 }, { value: 140 }, { value: 125 }, { value: purchaseOrdersCount }
-  ];
+  // Last 6 months of real spend, oldest first — used for both the sparkline and the
+  // month-over-month trend chart.
+  const monthKey = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+  const monthLabel = (key: string) => {
+    const [y, m] = key.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short' });
+  };
+  const spendByMonth = new Map<string, number>();
+  for (const po of receivedOrders) {
+    const key = monthKey(po.date);
+    if (!key) continue;
+    spendByMonth.set(key, (spendByMonth.get(key) || 0) + po.total);
+  }
+  const sortedMonthKeys = Array.from(spendByMonth.keys()).sort();
+  const recentMonthKeys = sortedMonthKeys.slice(-6);
+  const monthlySpendData = recentMonthKeys.map(key => ({ month: monthLabel(key), Spend: spendByMonth.get(key) || 0 }));
 
-  const deliverySpark = [
-    { value: 85 }, { value: 87 }, { value: 86 }, { value: 89 }, { value: 88 },
-    { value: 90 }, { value: 87 }, { value: 89 }, { value: 88 }, { value: deliveryRate }
-  ];
+  const totalSpendSpark = recentMonthKeys.length > 0
+    ? recentMonthKeys.map(key => ({ value: spendByMonth.get(key) || 0 }))
+    : [{ value: 0 }, { value: 0 }];
 
-  const avgValueSpark = [
-    { value: 550 }, { value: 580 }, { value: 560 }, { value: 610 }, { value: 590 },
-    { value: 620 }, { value: 600 }, { value: 630 }, { value: 590 }, { value: avgPOValueVal }
-  ];
+  // Purchase-order-count and avg-value sparklines: last up-to-6 months, counted the same way.
+  const countByMonth = new Map<string, number>();
+  const valueSumByMonth = new Map<string, { sum: number; count: number }>();
+  for (const po of purchaseOrders) {
+    const key = monthKey(po.date);
+    if (!key) continue;
+    countByMonth.set(key, (countByMonth.get(key) || 0) + 1);
+    const entry = valueSumByMonth.get(key) || { sum: 0, count: 0 };
+    entry.sum += po.total;
+    entry.count += 1;
+    valueSumByMonth.set(key, entry);
+  }
+  const allMonthKeysSorted = Array.from(new Set([...countByMonth.keys(), ...valueSumByMonth.keys()])).sort().slice(-6);
+  const poCountSpark = allMonthKeysSorted.length > 0
+    ? allMonthKeysSorted.map(key => ({ value: countByMonth.get(key) || 0 }))
+    : [{ value: 0 }, { value: 0 }];
+  const avgValueSpark = allMonthKeysSorted.length > 0
+    ? allMonthKeysSorted.map(key => {
+        const e = valueSumByMonth.get(key);
+        return { value: e && e.count > 0 ? Math.round(e.sum / e.count) : 0 };
+      })
+    : [{ value: 0 }, { value: 0 }];
+  const receivedRateSpark = [{ value: receivedRate }, { value: receivedRate }];
 
-  // Top Suppliers Horizontal Bar Chart Data
-  const topSuppliersData = [
-    { name: 'Alpha Distributors', spend: hasData ? 48000 : 48000 },
-    { name: 'Beta Industries', spend: hasData ? 36000 : 36000 },
-    { name: 'Zenith Supplies', spend: hasData ? 30000 : 30000 },
-    { name: 'Orion Equipments', spend: hasData ? 24000 : 24000 },
-    { name: 'Stellar Tools', spend: hasData ? 16000 : 16000 },
-    { name: 'Denny Shoes', spend: hasData ? 10000 : 10000 },
-  ];
+  // Top suppliers by real total spend (all orders, any status, so it reflects true
+  // commitment/exposure to that supplier — not just received ones).
+  const spendBySupplier = new Map<string, number>();
+  const orderCountBySupplier = new Map<string, number>();
+  for (const po of purchaseOrders) {
+    spendBySupplier.set(po.supplierName, (spendBySupplier.get(po.supplierName) || 0) + po.total);
+    orderCountBySupplier.set(po.supplierName, (orderCountBySupplier.get(po.supplierName) || 0) + 1);
+  }
+  const topSuppliersData = Array.from(spendBySupplier.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([name, spend]) => ({ name, spend }));
 
-  // Monthly Spend Trend Line Chart Data
-  const monthlySpendData = [
-    { month: 'Jan', Spend: 36000 },
-    { month: 'Feb', Spend: 28000 },
-    { month: 'Mar', Spend: 44000 },
-    { month: 'Apr', Spend: 29000 },
-    { month: 'May', Spend: 49000 },
-    { month: 'Jun', Spend: 32000 },
-    { month: 'Jul', Spend: 44000 },
-    { month: 'Aug', Spend: 27000 },
-    { month: 'Sep', Spend: 42000 },
-    { month: 'Oct', Spend: 30000 },
-    { month: 'Nov', Spend: 41000 },
-    { month: 'Dec', Spend: 28000 },
-  ];
+  // Real per-supplier scatter: order count (X) vs total spend (Y) — replaces the old
+  // fictional "Quality / Cost Efficiency" scores, which nothing in the system tracks.
+  const supplierPerformanceData = Array.from(spendBySupplier.entries())
+    .map(([name, spend]) => ({ name, Orders: orderCountBySupplier.get(name) || 0, Spend: spend }));
 
-  // High-fidelity sidebar payments
-  const mockPayments = [
-    { name: 'Robert Cooper', id: '#CUS0020', amount: 2300, status: 'Paid', statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-    { name: 'Helen Nelson', id: '#CUS0019', amount: 3600, status: 'Pending', statusColor: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-    { name: 'Thomas Neal', id: '#CUS0018', amount: 4100, status: 'Paid', statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-    { name: 'Sarah Spivey', id: '#CUS0017', amount: 1500, status: 'Paid', statusColor: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-    { name: 'Jared Griffin', id: '#CUS0015', amount: 2700, status: 'Pending', statusColor: 'bg-amber-500/10 text-amber-400 border-amber-500/20' }
-  ];
+  // Spend by product category, from real PO line items joined to product.category.
+  const spendByCategoryMap = new Map<string, number>();
+  for (const po of purchaseOrders) {
+    for (const item of po.items || []) {
+      const cat = productCategoryById.get(item.productId) || 'Uncategorized';
+      spendByCategoryMap.set(cat, (spendByCategoryMap.get(cat) || 0) + item.subtotal);
+    }
+  }
+  const categoryPalette = [COLORS.clothing, COLORS.beauty, COLORS.electronics, COLORS.orders, COLORS.avgValue, COLORS.delivery];
+  const totalCategorySpend = Array.from(spendByCategoryMap.values()).reduce((a, b) => a + b, 0);
+  const spendByCategoryData = Array.from(spendByCategoryMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([name, val], idx) => ({
+      name,
+      value: totalCategorySpend > 0 ? Math.round((val / totalCategorySpend) * 100) : 0,
+      color: categoryPalette[idx % categoryPalette.length],
+    }));
 
-  // Top Orders Table Data
-  const topOrdersList = [
-    { id: '#ORDO0020', supplier: 'Alpha Distributors', category: 'Raw Materials', amount: 500, status: 'Delivered', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-    { id: '#ORDO0019', supplier: 'Beta Industries', category: 'IT Equipment', amount: 850, status: 'Pending', color: 'bg-amber-500/10 text-amber-400 border-amber-500/20' },
-    { id: '#ORDO0018', supplier: 'Zenith Supplies', category: 'IT Equipment', amount: 120, status: 'In Transit', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-    { id: '#ORDO0017', supplier: 'Orion Equipments', category: 'Office Supplies', amount: 860, status: 'Delivered', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-  ];
-
-  // Supplier Performance Scatter Plot Data (Quality vs Cost)
-  const supplierPerformanceData = [
-    { name: 'Alpha Dist', Quality: 85, CostEfficiency: 70, spend: 45000 },
-    { name: 'Beta Ind', Quality: 92, CostEfficiency: 82, spend: 32000 },
-    { name: 'Zenith Sup', Quality: 78, CostEfficiency: 60, spend: 28000 },
-    { name: 'Orion Equip', Quality: 88, CostEfficiency: 88, spend: 24000 },
-    { name: 'Stellar Tools', Quality: 95, CostEfficiency: 75, spend: 18000 },
-    { name: 'Denny Shoes', Quality: 80, CostEfficiency: 65, spend: 12000 },
-  ];
-
-  // Spend by Category Semi-circle Gauge Donut Data
-  const spendByCategoryData = [
-    { name: 'Clothing', value: 42, color: COLORS.clothing },
-    { name: 'Beauty Products', value: 38, color: COLORS.beauty },
-    { name: 'Electronics', value: 20, color: COLORS.electronics },
-  ];
-
-  // Concentric Radial Chart for Order Status
+  // Real order status breakdown (Ordered / Received / Cancelled).
+  const statusCounts = { Ordered: 0, Received: 0, Cancelled: 0 } as Record<string, number>;
+  for (const po of purchaseOrders) {
+    statusCounts[po.status] = (statusCounts[po.status] || 0) + 1;
+  }
   const orderStatusRadialData = [
-    { name: 'Rejected', value: 12, fill: COLORS.concentric[3] },
-    { name: 'Pending', value: 32, fill: COLORS.concentric[2] },
-    { name: 'Delivered', value: 68, fill: COLORS.concentric[1] },
-    { name: 'Approved', value: 94, fill: COLORS.concentric[0] },
+    { name: 'Cancelled', value: purchaseOrdersCount > 0 ? Math.round((statusCounts.Cancelled / purchaseOrdersCount) * 100) : 0, fill: COLORS.concentric[3] },
+    { name: 'Ordered', value: purchaseOrdersCount > 0 ? Math.round((statusCounts.Ordered / purchaseOrdersCount) * 100) : 0, fill: COLORS.concentric[2] },
+    { name: 'Received', value: purchaseOrdersCount > 0 ? Math.round((statusCounts.Received / purchaseOrdersCount) * 100) : 0, fill: COLORS.concentric[1] },
   ];
 
-  // Recent Procurement Activity
-  const recentProcurementActivity = [
-    { id: '#PA0020', supplier: 'Alpha Distributors', requestor: 'Alexander Kenn', purchaseId: '#PO00020', ordered: 2, delivered: 2, date: '11 Sep 2025', status: 'Delivered', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-    { id: '#PA0019', supplier: 'Beta Industries', requestor: 'Gabriella White', purchaseId: '#PO00019', ordered: 3, delivered: 3, date: '05 Sep 2025', status: 'Delivered', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-    { id: '#PA0018', supplier: 'Zenith Supplies', requestor: 'Christopher Ray', purchaseId: '#PO00018', ordered: 5, delivered: 5, date: '27 Aug 2025', status: 'Delivered', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' },
-    { id: '#PA0017', supplier: 'Orion Equipments', requestor: 'Penelope Ton', purchaseId: '#PO00017', ordered: 10, delivered: 4, date: '16 Aug 2025', status: 'Partially Delivered', color: 'bg-blue-500/10 text-blue-400 border-blue-500/20' },
-    { id: '#PA0011', supplier: 'Stellar Tools', requestor: 'Catherine Lan', purchaseId: '#PO00011', ordered: 7, delivered: 7, date: '18 May 2025', status: 'Delivered', color: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' }
-  ];
+  // Pending (not yet received) purchase orders — real, and genuinely useful: this is
+  // what's still outstanding with suppliers. Replaces the old "Payments" sidebar, which
+  // showed unrelated customer-payment mock data that doesn't belong on a purchase dashboard.
+  const pendingOrders = purchaseOrders
+    .filter(po => po.status === 'Ordered')
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 6);
+
+  // Top orders by real value.
+  const topOrdersList = [...purchaseOrders]
+    .sort((a, b) => b.total - a.total)
+    .slice(0, 6)
+    .map(po => {
+      const categories = new Set((po.items || []).map(i => productCategoryById.get(i.productId) || 'Uncategorized'));
+      const category = categories.size === 1 ? Array.from(categories)[0] : categories.size > 1 ? 'Mixed' : '—';
+      const color = po.status === 'Received'
+        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+        : po.status === 'Cancelled'
+        ? 'bg-red-500/10 text-red-400 border-red-500/20'
+        : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      return { id: po.poNo, supplier: po.supplierName, category, amount: po.total, status: po.status, color };
+    });
+
+  // Recent procurement activity — real, most recent orders. "Requestor" and "Delivered
+  // Qty" columns were dropped: the data model doesn't track who requested a PO or
+  // partial-delivery quantities, so those columns can't be filled with real data.
+  const recentProcurementActivity = [...purchaseOrders]
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 8)
+    .map(po => {
+      const itemCount = (po.items || []).reduce((s, i) => s + i.quantity, 0);
+      const color = po.status === 'Received'
+        ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'
+        : po.status === 'Cancelled'
+        ? 'bg-red-500/10 text-red-400 border-red-500/20'
+        : 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+      return {
+        id: po.poNo,
+        supplier: po.supplierName,
+        purchaseId: po.poNo,
+        itemQty: itemCount,
+        total: po.total,
+        date: new Date(po.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+        status: po.status,
+        color,
+      };
+    });
 
   const triggerExport = () => {
     setShowExportSuccess(true);
@@ -310,21 +353,22 @@ export default function PurchaseDashboard({
           </div>
         </div>
 
-        {/* On Time Delivery */}
+        {/* Received Rate (replaces the previously fictional "On Time Delivery" %, which
+             had no real data behind it — this is a real, computable metric instead) */}
         <div className="bg-[#0b0c13] border border-slate-800/50 rounded-2xl p-4.5 flex flex-col justify-between hover:border-slate-700/60 transition-all shadow-xl shadow-black/20 relative overflow-hidden group">
           <div className="flex items-center justify-between">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1.5 font-sans">
               <Truck className="h-3.5 w-3.5 text-orange-400" />
-              On Time Delivery
+              Received Rate
             </span>
           </div>
           <div className="mt-2.5 flex items-baseline gap-2">
-            <span className="text-2xl font-black text-slate-100 font-sans">{deliveryRate}%</span>
+            <span className="text-2xl font-black text-slate-100 font-sans">{receivedRate}%</span>
           </div>
           {/* Orange sparkline below */}
           <div className="h-8 mt-4.5 w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={deliverySpark}>
+              <AreaChart data={receivedRateSpark}>
                 <defs>
                   <linearGradient id="deliveryGrad" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={COLORS.delivery} stopOpacity={0.2}/>
@@ -376,12 +420,15 @@ export default function PurchaseDashboard({
             </div>
             {/* Year Dropdown */}
             <div className="flex items-center gap-1 bg-[#12141f] border border-slate-800/80 px-2.5 py-1 rounded-lg hover:bg-[#161927] transition-all cursor-pointer">
-              <span className="text-[10px] font-bold text-slate-300 font-mono">{selectedYear}</span>
+              <span className="text-[10px] font-bold text-slate-300 font-mono">All Time</span>
               <ChevronDown className="h-2.5 w-2.5 text-slate-500" />
             </div>
           </div>
 
           <div className="h-64 w-full">
+            {topSuppliersData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-[10px] text-slate-500 font-mono">কোনো ডাটা নেই</div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart
                 data={topSuppliersData}
@@ -400,6 +447,7 @@ export default function PurchaseDashboard({
                 <Bar dataKey="spend" fill={COLORS.barColor} radius={[0, 6, 6, 0]} barSize={12} />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -412,12 +460,15 @@ export default function PurchaseDashboard({
             </div>
             {/* Month Dropdown */}
             <div className="flex items-center gap-1 bg-[#12141f] border border-slate-800/80 px-2.5 py-1 rounded-lg hover:bg-[#161927] transition-all cursor-pointer">
-              <span className="text-[10px] font-bold text-slate-300 font-sans">{selectedMonth}</span>
+              <span className="text-[10px] font-bold text-slate-300 font-sans">Last 6 Months</span>
               <ChevronDown className="h-2.5 w-2.5 text-slate-500" />
             </div>
           </div>
 
           <div className="h-64 w-full">
+            {monthlySpendData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-[10px] text-slate-500 font-mono">কোনো ডাটা নেই</div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart
                 data={monthlySpendData}
@@ -441,6 +492,7 @@ export default function PurchaseDashboard({
                 />
               </LineChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
@@ -451,8 +503,8 @@ export default function PurchaseDashboard({
         <div className="lg:col-span-4 bg-[#0b0c13] border border-slate-800/50 rounded-2xl p-4.5 flex flex-col shadow-xl shadow-black/10">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-xs font-black text-slate-200 uppercase tracking-wider font-sans">Payments</h3>
-              <p className="text-[9px] text-slate-500 font-mono mt-0.5">Supplier cashout clearance logs</p>
+              <h3 className="text-xs font-black text-slate-200 uppercase tracking-wider font-sans">Pending Orders</h3>
+              <p className="text-[9px] text-slate-500 font-mono mt-0.5">Orders placed, awaiting receipt</p>
             </div>
             <button
               onClick={() => onTabChange('purchase', 'purchase_orders')}
@@ -463,25 +515,29 @@ export default function PurchaseDashboard({
           </div>
 
           <div className="space-y-3.5 overflow-y-auto max-h-[17.5rem] pr-1.5 custom-scrollbar font-sans flex-1">
-            {mockPayments.map((pay, idx) => (
+            {pendingOrders.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-[10px] text-slate-500 font-mono py-8">
+                কোনো অপেক্ষমান অর্ডার নেই
+              </div>
+            ) : pendingOrders.map((po) => (
               <div
-                key={idx}
+                key={po.id}
                 className="flex items-center justify-between p-3 bg-[#0f111a]/40 border border-slate-800/40 rounded-xl hover:bg-[#0f111a]/80 transition-all cursor-pointer"
               >
                 <div className="flex items-center gap-2.5">
                   <div className="h-8.5 w-8.5 rounded-full bg-slate-800 border border-slate-700/60 flex items-center justify-center text-xs font-black text-slate-300">
-                    {pay.name.split(' ').map(n => n[0]).join('')}
+                    {po.supplierName.split(' ').map(n => n[0]).join('').slice(0, 2)}
                   </div>
                   <div>
-                    <span className="text-xs font-black text-slate-100 block">{pay.name}</span>
-                    <span className="text-[10px] text-slate-500 font-mono mt-0.5">{pay.id}</span>
+                    <span className="text-xs font-black text-slate-100 block">{po.supplierName}</span>
+                    <span className="text-[10px] text-slate-500 font-mono mt-0.5">{po.poNo}</span>
                   </div>
                 </div>
 
                 <div className="text-right">
-                  <span className="text-xs font-black text-slate-100 block">${pay.amount.toLocaleString()}</span>
-                  <span className={`inline-block px-2 py-0.5 text-[9px] font-black rounded-full border mt-1 ${pay.statusColor}`}>
-                    {pay.status}
+                  <span className="text-xs font-black text-slate-100 block">${po.total.toLocaleString()}</span>
+                  <span className="inline-block px-2 py-0.5 text-[9px] font-black rounded-full border mt-1 bg-amber-500/10 text-amber-400 border-amber-500/20">
+                    Ordered
                   </span>
                 </div>
               </div>
@@ -516,7 +572,9 @@ export default function PurchaseDashboard({
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/40">
-                {topOrdersList.map((ord, idx) => (
+                {topOrdersList.length === 0 ? (
+                  <tr><td colSpan={5} className="py-8 text-center text-[10px] text-slate-500 font-mono">এখনো কোনো অর্ডার নেই</td></tr>
+                ) : topOrdersList.map((ord, idx) => (
                   <tr key={idx} className="hover:bg-[#0f111a]/40 transition-colors">
                     <td className="py-3 px-3 text-xs font-mono font-bold text-slate-400">{ord.id}</td>
                     <td className="py-3 px-3 text-xs">
@@ -544,31 +602,33 @@ export default function PurchaseDashboard({
 
       {/* 5. Row 3: Supplier Performance, Spend by Category, Order Status (3 Columns) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Supplier Performance Scatter / Dot Chart */}
+        {/* Supplier Spend vs Order Volume Scatter (real data — replaces a previous
+             "Quality vs Cost Efficiency" chart that had no underlying data source) */}
         <div className="lg:col-span-6 bg-[#0b0c13] border border-slate-800/50 rounded-2xl p-4.5 flex flex-col justify-between shadow-xl shadow-black/10">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h3 className="text-xs font-black text-slate-200 uppercase tracking-wider font-sans">Supplier Performance</h3>
-              <p className="text-[9px] text-slate-500 font-mono mt-0.5">Quality rating versus Cost Efficiency matrices</p>
+              <h3 className="text-xs font-black text-slate-200 uppercase tracking-wider font-sans">Supplier Spend vs Volume</h3>
+              <p className="text-[9px] text-slate-500 font-mono mt-0.5">Order count versus total spend per supplier</p>
             </div>
-            {/* Year Dropdown */}
-            <div className="flex items-center gap-1 bg-[#12141f] border border-slate-800/80 px-2.5 py-1 rounded-lg hover:bg-[#161927] transition-all cursor-pointer">
-              <span className="text-[10px] font-bold text-slate-300 font-mono">2026</span>
-              <ChevronDown className="h-2.5 w-2.5 text-slate-500" />
+            <div className="flex items-center gap-1 bg-[#12141f] border border-slate-800/80 px-2.5 py-1 rounded-lg">
+              <span className="text-[10px] font-bold text-slate-300 font-mono">All Time</span>
             </div>
           </div>
 
           <div className="h-56 w-full">
+            {supplierPerformanceData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-[10px] text-slate-500 font-mono">কোনো ডাটা নেই</div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 10, right: 15, bottom: 5, left: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" opacity={0.15} />
-                <XAxis type="number" dataKey="Quality" name="Quality Score" stroke="#64748b" fontSize={9} unit="%" range={[50, 100]} domain={[50, 100]} />
-                <YAxis type="number" dataKey="CostEfficiency" name="Cost Efficiency" stroke="#64748b" fontSize={9} unit="%" range={[50, 100]} domain={[50, 100]} />
-                <ZAxis type="number" dataKey="spend" range={[40, 200]} />
+                <XAxis type="number" dataKey="Orders" name="Order Count" stroke="#64748b" fontSize={9} allowDecimals={false} />
+                <YAxis type="number" dataKey="Spend" name="Total Spend" stroke="#64748b" fontSize={9} tickFormatter={(v) => `$${v / 1000}k`} />
                 <Tooltip
                   cursor={{ strokeDasharray: '3 3' }}
                   contentStyle={{ backgroundColor: '#11131e', borderColor: '#334155', borderRadius: '12px' }}
                   itemStyle={{ color: '#fff', fontSize: '11px' }}
+                  formatter={(value: any, name: any) => [name === 'Spend' ? `$${Number(value).toLocaleString()}` : value, name]}
                 />
                 <Scatter name="Suppliers" data={supplierPerformanceData} fill={COLORS.clothing}>
                   {supplierPerformanceData.map((entry, index) => (
@@ -577,10 +637,11 @@ export default function PurchaseDashboard({
                 </Scatter>
               </ScatterChart>
             </ResponsiveContainer>
+            )}
           </div>
           <div className="flex items-center justify-center gap-4 mt-2 text-[9px] font-bold text-slate-400">
-            <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLORS.clothing }}></span> Quality</span>
-            <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLORS.spend }}></span> Cost Efficiency</span>
+            <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLORS.clothing }}></span> Order Count</span>
+            <span className="flex items-center gap-1"><span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLORS.spend }}></span> Total Spend</span>
           </div>
         </div>
 
@@ -599,6 +660,10 @@ export default function PurchaseDashboard({
           </div>
 
           <div className="h-44 w-full flex items-center justify-center relative">
+            {spendByCategoryData.length === 0 ? (
+              <div className="text-[10px] text-slate-500 font-mono">কোনো ডাটা নেই</div>
+            ) : (
+            <>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -624,9 +689,11 @@ export default function PurchaseDashboard({
               </PieChart>
             </ResponsiveContainer>
             <div className="absolute bottom-[20%] text-center">
-              <span className="text-base font-black text-slate-100">42%</span>
-              <span className="block text-[8px] text-slate-500 uppercase tracking-wider font-bold">Clothing</span>
+              <span className="text-base font-black text-slate-100">{spendByCategoryData[0].value}%</span>
+              <span className="block text-[8px] text-slate-500 uppercase tracking-wider font-bold">{spendByCategoryData[0].name}</span>
             </div>
+            </>
+            )}
           </div>
 
           <div className="space-y-1 mt-2.5 font-sans">
@@ -657,6 +724,9 @@ export default function PurchaseDashboard({
           </div>
 
           <div className="h-44 w-full flex items-center justify-center">
+            {purchaseOrdersCount === 0 ? (
+              <div className="text-[10px] text-slate-500 font-mono">কোনো ডাটা নেই</div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <RadialBarChart
                 cx="50%"
@@ -677,24 +747,21 @@ export default function PurchaseDashboard({
                 />
               </RadialBarChart>
             </ResponsiveContainer>
+            )}
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-[9px] font-bold text-slate-400 mt-2 font-sans">
-            <div className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLORS.concentric[0] }}></span>
-              <span>Approved</span>
-            </div>
+          <div className="grid grid-cols-3 gap-2 text-[9px] font-bold text-slate-400 mt-2 font-sans">
             <div className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLORS.concentric[1] }}></span>
-              <span>Delivered</span>
+              <span>Received</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLORS.concentric[2] }}></span>
-              <span>Pending</span>
+              <span>Ordered</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: COLORS.concentric[3] }}></span>
-              <span>Rejected</span>
+              <span>Cancelled</span>
             </div>
           </div>
         </div>
@@ -719,32 +786,25 @@ export default function PurchaseDashboard({
           <table className="w-full border-collapse">
             <thead>
               <tr className="border-b border-slate-800/60 text-slate-500 text-[10px] font-bold uppercase tracking-wider font-mono">
-                <th className="py-2.5 px-3 text-left">ID</th>
-                <th className="py-2.5 px-3 text-left">Supplier</th>
-                <th className="py-2.5 px-3 text-left">Requestor</th>
                 <th className="py-2.5 px-3 text-left">Purchase ID</th>
-                <th className="py-2.5 px-3 text-center">Ordered Qty</th>
-                <th className="py-2.5 px-3 text-center">Delivered Qty</th>
-                <th className="py-2.5 px-3 text-left">Delivery Date</th>
+                <th className="py-2.5 px-3 text-left">Supplier</th>
+                <th className="py-2.5 px-3 text-center">Item Qty</th>
+                <th className="py-2.5 px-3 text-right">Total</th>
+                <th className="py-2.5 px-3 text-left">Date</th>
                 <th className="py-2.5 px-3 text-center">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/40 text-xs">
-              {recentProcurementActivity.map((act, idx) => (
-                <tr key={idx} className="hover:bg-[#0f111a]/40 transition-colors">
-                  <td className="py-3 px-3 font-mono font-bold text-slate-400">{act.id}</td>
-                  <td className="py-3 px-3 font-extrabold text-slate-200">{act.supplier}</td>
-                  <td className="py-3 px-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-6 w-6 rounded-full bg-slate-800 flex items-center justify-center text-[10px] font-black text-slate-300">
-                        {act.requestor.split(' ').map(n => n[0]).join('')}
-                      </div>
-                      <span className="font-semibold text-slate-300">{act.requestor}</span>
-                    </div>
-                  </td>
+              {recentProcurementActivity.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="py-8 text-center text-[10px] text-slate-500 font-mono">এখনো কোনো Purchase Order নেই</td>
+                </tr>
+              ) : recentProcurementActivity.map((act) => (
+                <tr key={act.id} className="hover:bg-[#0f111a]/40 transition-colors">
                   <td className="py-3 px-3 font-mono font-black text-emerald-400">{act.purchaseId}</td>
-                  <td className="py-3 px-3 text-center font-mono font-bold text-slate-300">{act.ordered.toString().padStart(2, '0')}</td>
-                  <td className="py-3 px-3 text-center font-mono font-bold text-slate-300">{act.delivered.toString().padStart(2, '0')}</td>
+                  <td className="py-3 px-3 font-extrabold text-slate-200">{act.supplier}</td>
+                  <td className="py-3 px-3 text-center font-mono font-bold text-slate-300">{act.itemQty.toString().padStart(2, '0')}</td>
+                  <td className="py-3 px-3 text-right font-mono font-bold text-slate-300">${act.total.toLocaleString()}</td>
                   <td className="py-3 px-3 text-slate-400 font-medium">{act.date}</td>
                   <td className="py-3 px-3 text-center">
                     <span className={`inline-block px-2.5 py-0.5 text-[9px] font-black rounded-full border ${act.color}`}>

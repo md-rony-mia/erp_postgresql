@@ -4,6 +4,8 @@ import {
   Product,
   Supplier,
   Customer,
+  Transaction,
+  BankAccount,
 } from '../types';
 import {
   Calendar,
@@ -48,6 +50,8 @@ interface FinanceDashboardProps {
   products: Product[];
   suppliers: Supplier[];
   customers: Customer[];
+  transactions?: Transaction[];
+  bankAccounts?: BankAccount[];
   onTabChange: (tab: string, subTab?: string) => void;
 }
 
@@ -58,9 +62,9 @@ const COLORS = {
   sales: '#06b6d4',        // Teal Blue
   recurring: '#f59e0b',    // Amber Yellow
   serviceFees: '#8b5cf6',  // Purple
-  salaries: '#f97316',     // Salaries (Orange)
-  marketing: '#a855f7',    // Marketing (Violet)
-  miscellaneous: '#10b981',// Misc (Emerald)
+  paid: '#10b981',
+  unpaid: '#f59e0b',
+  categoryPalette: ['#f97316', '#a855f7', '#10b981', '#06b6d4', '#ec4899', '#f59e0b'],
 };
 
 export default function FinanceDashboard({
@@ -68,102 +72,127 @@ export default function FinanceDashboard({
   products,
   suppliers,
   customers,
+  transactions = [],
+  bankAccounts = [],
   onTabChange
 }: FinanceDashboardProps) {
-  const [selectedYear, setSelectedYear] = useState('2026');
-  const [selectedRevenuePeriod, setSelectedRevenuePeriod] = useState('Weekly');
-  const [selectedExpensesPeriod, setSelectedExpensesPeriod] = useState('2026');
   const [showExportSuccess, setShowExportSuccess] = useState(false);
 
-  // Dynamic derivation of finance stats from real invoices & accounts
-  const systemPaidRevenue = invoices
-    .filter(inv => inv.isPaid)
-    .reduce((sum, inv) => sum + inv.total, 0);
+  // ---- Real, derived-from-data calculations only (no hardcoded placeholder numbers) ----
 
-  const systemUnpaidRevenue = invoices
-    .filter(inv => !inv.isPaid)
-    .reduce((sum, inv) => sum + inv.total, 0);
+  const productCostById = new Map(products.map(p => [p.id, p.cost]));
 
-  // Check if there is actual ERP user data populated
-  const hasData = invoices.length > 0 || products.length > 0 || suppliers.length > 0 || customers.length > 0;
+  const paidInvoices = invoices.filter(inv => inv.isPaid);
+  const unpaidInvoices = invoices.filter(inv => !inv.isPaid);
+  const totalInvoicedVal = invoices.reduce((sum, inv) => sum + inv.total, 0);
 
-  // Fallback / Merged stats to ensure high-fidelity UI visual pop (like the user's screenshot)
-  const totalRevenueVal = systemPaidRevenue > 0 ? systemPaidRevenue : (hasData ? 125000 : 0);
-  const totalExpensesVal = hasData ? 89500 : 0;
-  const pendingInvoicesCount = invoices.filter(inv => !inv.isPaid).length > 0 ? invoices.filter(inv => !inv.isPaid).length : (hasData ? 12 : 0);
+  const totalRevenueVal = paidInvoices.reduce((sum, inv) => sum + inv.total, 0);
+  const totalExpensesVal = transactions
+    .filter(t => t.type === 'Expense')
+    .reduce((sum, t) => sum + t.amount, 0);
+  const pendingInvoicesCount = unpaidInvoices.length;
   const netProfitVal = totalRevenueVal - totalExpensesVal;
-  const budgetUtilizationVal = hasData ? 65 : 0; // %
+  // "Budget Utilization" had no real budget/target data anywhere in the system — replaced
+  // with a real, genuinely useful metric: how much of what's been invoiced has actually
+  // been collected in cash.
+  const collectionRateVal = totalInvoicedVal > 0 ? Math.round((totalRevenueVal / totalInvoicedVal) * 100) : 0;
 
-  // High-fidelity chart data mirroring the user's requested layout exactly
-  const revenueVsExpenseData = [
-    { month: 'Jan', Revenue: hasData ? 45000 : 0, Expense: hasData ? 32000 : 0 },
-    { month: 'Feb', Revenue: hasData ? 52000 : 0, Expense: hasData ? 36000 : 0 },
-    { month: 'Mar', Revenue: hasData ? 49000 : 0, Expense: hasData ? 34000 : 0 },
-    { month: 'Apr', Revenue: hasData ? 61000 : 0, Expense: hasData ? 41000 : 0 },
-    { month: 'May', Revenue: hasData ? 58000 : 0, Expense: hasData ? 39000 : 0 },
-    { month: 'Jun', Revenue: hasData ? 65000 : 0, Expense: hasData ? 45000 : 0 },
-    { month: 'Jul', Revenue: hasData ? 72000 : 0, Expense: hasData ? 48000 : 0 },
-    { month: 'Aug', Revenue: hasData ? 68000 : 0, Expense: hasData ? 46000 : 0 },
-    { month: 'Sep', Revenue: hasData ? 75000 : 0, Expense: hasData ? 51000 : 0 },
-    { month: 'Oct', Revenue: hasData ? 82000 : 0, Expense: hasData ? 55000 : 0 },
-    { month: 'Nov', Revenue: hasData ? 90000 : 0, Expense: hasData ? 62000 : 0 },
-    { month: 'Dec', Revenue: totalRevenueVal, Expense: totalExpensesVal },
-  ];
+  const monthKey = (dateStr: string) => {
+    const d = new Date(dateStr);
+    return isNaN(d.getTime()) ? null : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+  };
+  const monthLabel = (key: string) => {
+    const [y, m] = key.split('-').map(Number);
+    return new Date(y, m - 1, 1).toLocaleDateString('en-US', { month: 'short' });
+  };
 
-  const profitMarginVsSalesData = [
-    { month: 'Jan', Sales: hasData ? 45000 : 0, Margin: hasData ? 28.8 : 0 },
-    { month: 'Feb', Sales: hasData ? 52000 : 0, Margin: hasData ? 30.7 : 0 },
-    { month: 'Mar', Sales: hasData ? 49000 : 0, Margin: hasData ? 30.6 : 0 },
-    { month: 'Apr', Sales: hasData ? 61000 : 0, Margin: hasData ? 32.7 : 0 },
-    { month: 'May', Sales: hasData ? 58000 : 0, Margin: hasData ? 32.7 : 0 },
-    { month: 'Jun', Sales: hasData ? 65000 : 0, Margin: hasData ? 30.7 : 0 },
-    { month: 'Jul', Sales: hasData ? 72000 : 0, Margin: hasData ? 33.3 : 0 },
-    { month: 'Aug', Sales: hasData ? 68000 : 0, Margin: hasData ? 32.3 : 0 },
-    { month: 'Sep', Sales: hasData ? 75000 : 0, Margin: hasData ? 32.0 : 0 },
-    { month: 'Oct', Sales: hasData ? 82000 : 0, Margin: hasData ? 32.9 : 0 },
-    { month: 'Nov', Sales: hasData ? 90000 : 0, Margin: hasData ? 31.1 : 0 },
-    { month: 'Dec', Sales: totalRevenueVal, Margin: hasData ? 28.4 : 0 },
-  ];
+  // Real gross margin for an invoice: (price - product cost) x quantity, summed across
+  // its line items, joined against real product cost data.
+  const invoiceMargin = (inv: Invoice) => {
+    return (inv.items || []).reduce((sum, item) => {
+      const cost = productCostById.get(item.productId) ?? 0;
+      return sum + (item.price - cost) * item.quantity;
+    }, 0);
+  };
 
-  // High-fidelity circular chart data
+  const revenueByMonth = new Map<string, number>();
+  const marginByMonth = new Map<string, number>();
+  for (const inv of paidInvoices) {
+    const key = monthKey(inv.date);
+    if (!key) continue;
+    revenueByMonth.set(key, (revenueByMonth.get(key) || 0) + inv.total);
+    marginByMonth.set(key, (marginByMonth.get(key) || 0) + invoiceMargin(inv));
+  }
+  const expenseByMonth = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.type !== 'Expense') continue;
+    const key = monthKey(t.date);
+    if (!key) continue;
+    expenseByMonth.set(key, (expenseByMonth.get(key) || 0) + t.amount);
+  }
+
+  const allMonthKeys = Array.from(new Set([...revenueByMonth.keys(), ...expenseByMonth.keys()])).sort().slice(-6);
+  const revenueVsExpenseData = allMonthKeys.map(key => ({
+    month: monthLabel(key),
+    Revenue: revenueByMonth.get(key) || 0,
+    Expense: expenseByMonth.get(key) || 0,
+  }));
+
+  const profitMarginVsSalesData = allMonthKeys.map(key => {
+    const sales = revenueByMonth.get(key) || 0;
+    const margin = marginByMonth.get(key) || 0;
+    return { month: monthLabel(key), Sales: sales, Margin: sales > 0 ? Math.round((margin / sales) * 1000) / 10 : 0 };
+  });
+
+  // Revenue donut: real Paid vs Unpaid split of total invoiced amount (replaces a
+  // previous "Sales / Recurring / Service Fees" breakdown — the app doesn't track
+  // separate revenue streams like that anywhere).
+  const unpaidTotal = unpaidInvoices.reduce((sum, inv) => sum + inv.total, 0);
   const revenueDonutData = [
-    { name: 'Sales', value: hasData ? 90000 : 0, color: COLORS.revenue },
-    { name: 'Recurring', value: hasData ? 22500 : 0, color: COLORS.recurring },
-    { name: 'Service Fees', value: hasData ? 12500 : 0, color: COLORS.serviceFees },
-  ];
+    { name: 'Paid', value: totalRevenueVal, color: COLORS.paid },
+    { name: 'Unpaid', value: unpaidTotal, color: COLORS.unpaid },
+  ].filter(d => d.value > 0);
 
-  const expensesDonutData = [
-    { name: 'Salaries', value: hasData ? 44750 : 0, percentage: hasData ? 50 : 0, color: COLORS.salaries },
-    { name: 'Marketing', value: hasData ? 26850 : 0, percentage: hasData ? 30 : 0, color: COLORS.marketing },
-    { name: 'Miscellaneous', value: hasData ? 17900 : 0, percentage: hasData ? 20 : 0, color: COLORS.miscellaneous },
-  ];
+  // Expenses donut: real breakdown by each transaction's actual category.
+  const expenseByCategory = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.type !== 'Expense') continue;
+    expenseByCategory.set(t.category, (expenseByCategory.get(t.category) || 0) + t.amount);
+  }
+  const expensesDonutData = Array.from(expenseByCategory.entries())
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([name, value], idx) => ({
+      name,
+      value,
+      percentage: totalExpensesVal > 0 ? Math.round((value / totalExpensesVal) * 100) : 0,
+      color: COLORS.categoryPalette[idx % COLORS.categoryPalette.length],
+    }));
 
-  // Map real invoices + fallback mock to populate high visual quality
-  const mockRecentInvoices = [
-    { id: '1', invoiceNo: '#INVO0020', customerName: 'Apex Computers', total: 10000, status: 'Paid' },
-    { id: '2', invoiceNo: '#INVO0019', customerName: 'Zenith Supplies', total: 6500, status: 'Unpaid' },
-    { id: '3', invoiceNo: '#INVO0018', customerName: 'Nexa Corp', total: 12400, status: 'Paid' },
-    { id: '4', invoiceNo: '#INVO0017', customerName: 'Orion Solutions', total: 4200, status: 'Overdue' },
-    { id: '5', invoiceNo: '#INVO0016', customerName: 'Matrix Technologies', total: 8900, status: 'Paid' }
-  ];
+  const displayedRecentInvoices = invoices.slice(-6).reverse().map((inv) => ({
+    id: inv.id,
+    invoiceNo: inv.invoiceNo,
+    customerName: inv.customerName,
+    total: inv.total,
+    status: inv.isPaid ? 'Paid' : 'Unpaid'
+  }));
 
-  const displayedRecentInvoices = invoices.length > 0 
-    ? invoices.slice(-5).reverse().map((inv) => ({
-        id: inv.id,
-        invoiceNo: inv.invoiceNo,
-        customerName: inv.customerName,
-        total: inv.total,
-        status: inv.isPaid ? 'Paid' : 'Unpaid'
-      }))
-    : (hasData ? mockRecentInvoices : []);
-
-  // Payments high visual fidelity
-  const paymentsData = hasData ? [
-    { id: '#PAYO0020', date: '11 Sep 2025', payee: 'Zenith Supplies', desc: 'Office Stationery', invoiceId: '#INVO0020', amount: 10000, bank: 'BOA - 4567329878', method: 'Cash', status: 'Paid' },
-    { id: '#PAYO0019', date: '10 Sep 2025', payee: 'Apex Computers', desc: 'Server Hosting', invoiceId: '#INVO0019', amount: 12500, bank: 'CHASE - 1102987342', method: 'Card', status: 'Paid' },
-    { id: '#PAYO0018', date: '08 Sep 2025', payee: 'Orion Solutions', desc: 'Consultation', invoiceId: '#INVO0018', amount: 4200, bank: 'HSBC - 9988223412', method: 'Transfer', status: 'Pending' },
-    { id: '#PAYO0017', date: '05 Sep 2025', payee: 'Nexa Corp', desc: 'Software Licenses', invoiceId: '#INVO0017', amount: 8900, bank: 'BOA - 4567329878', method: 'Mobile Wallet', status: 'Paid' }
-  ] : [];
+  // Recent Payments = real outgoing "Expense" transactions, most recent first. "Invoice
+  // ID" and "Method" columns were dropped: Transaction doesn't reference an invoice or
+  // record a payment method, so those can't be filled with real data.
+  const bankNameById = new Map(bankAccounts.map(b => [b.id, `${b.bankName} - ${b.accountNumber}`]));
+  const paymentsData = [...transactions]
+    .filter(t => t.type === 'Expense')
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    .slice(0, 8)
+    .map(t => ({
+      id: t.id,
+      date: new Date(t.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      category: t.category,
+      desc: t.description,
+      amount: t.amount,
+      bank: bankNameById.get(t.accountId) || t.accountId || '—',
+    }));
 
   const triggerExport = () => {
     setShowExportSuccess(true);
@@ -232,21 +261,13 @@ export default function FinanceDashboard({
               <p className="text-[11px] text-slate-400 font-medium mt-0.5">Automated Monthly operating inflows vs outflows</p>
             </div>
             
-            {/* Year Selector */}
-            <div className="relative">
-              <select 
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(e.target.value)}
-                className="appearance-none bg-[#0f111a] hover:bg-slate-800/60 text-[11px] font-extrabold text-slate-300 pl-3 pr-8 py-1.5 rounded-lg border border-slate-800 outline-none cursor-pointer"
-              >
-                <option value="2026">2026</option>
-                <option value="2025">2025</option>
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-500 pointer-events-none" />
-            </div>
+            <div className="text-[11px] font-extrabold text-slate-500 font-mono">Last 6 Months</div>
           </div>
 
           <div className="h-72 w-full font-sans">
+            {revenueVsExpenseData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-[11px] text-slate-500 font-mono">কোনো ডাটা নেই</div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={revenueVsExpenseData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#222533" vertical={false} />
@@ -275,6 +296,7 @@ export default function FinanceDashboard({
                 <Bar dataKey="Expense" fill={COLORS.expense} radius={[4, 4, 0, 0]} barSize={12} />
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           {/* Chart Custom Legend */}
@@ -354,9 +376,6 @@ export default function FinanceDashboard({
           <div>
             <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">Total Revenue</span>
             <p className="text-2xl font-black font-display text-white mt-1.5">${totalRevenueVal.toLocaleString()}</p>
-            <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5 mt-2">
-              <span className="text-xs">↑</span> +12.4% Last 30 days
-            </span>
           </div>
 
           {/* Circle Chart Widget Icon on right */}
@@ -377,9 +396,6 @@ export default function FinanceDashboard({
           <div>
             <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">Total Expenses</span>
             <p className="text-2xl font-black font-display text-white mt-1.5">${totalExpensesVal.toLocaleString()}</p>
-            <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5 mt-2">
-              <span className="text-xs">↓</span> -6.8% Last 30 days
-            </span>
           </div>
 
           {/* Calculator Icon on right */}
@@ -397,9 +413,6 @@ export default function FinanceDashboard({
           <div>
             <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">Pending Invoices</span>
             <p className="text-2xl font-black font-display text-white mt-1.5">{pendingInvoicesCount}</p>
-            <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5 mt-2">
-              <span className="text-xs">↑</span> +5.2% Last 30 days
-            </span>
           </div>
 
           {/* Pink Document Icon on right */}
@@ -408,18 +421,16 @@ export default function FinanceDashboard({
           </div>
         </motion.div>
 
-        {/* KPI 4: Budget Utilization */}
+        {/* KPI 4: Collection Rate (replaces "Budget Utilization" — no budget/target data
+             exists anywhere in the system; this is a real, computable metric instead) */}
         <motion.div 
           whileHover={{ y: -3 }}
           className="bg-[#161923] border border-slate-800/80 rounded-2xl p-5 shadow-md flex justify-between items-center group relative overflow-hidden"
         >
           <div className="absolute -top-12 -right-12 w-24 h-24 bg-purple-500/2 blur-[40px] rounded-full pointer-events-none"></div>
           <div>
-            <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">Budget Utilization</span>
-            <p className="text-2xl font-black font-display text-white mt-1.5">{budgetUtilizationVal}%</p>
-            <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5 mt-2">
-              <span className="text-xs">↑</span> +5.2% Last 30 days
-            </span>
+            <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">Collection Rate</span>
+            <p className="text-2xl font-black font-display text-white mt-1.5">{collectionRateVal}%</p>
           </div>
 
           {/* Violet Bar Chart Icon on right */}
@@ -437,9 +448,6 @@ export default function FinanceDashboard({
           <div>
             <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">Net Profit / Loss</span>
             <p className="text-2xl font-black font-display text-[#10b981] mt-1.5">${netProfitVal.toLocaleString()}</p>
-            <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-0.5 mt-2">
-              <span className="text-xs">↑</span> +18.0% Last 30 days
-            </span>
           </div>
 
           {/* Green Trending Up Arrow Icon on right */}
@@ -451,29 +459,22 @@ export default function FinanceDashboard({
 
       {/* Row 3: 3 Detailed Sub-Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 relative z-10">
-        {/* Sub-Chart 1: Revenue Breakdowns */}
+        {/* Sub-Chart 1: Revenue Collection Breakdown (real Paid vs Unpaid — replaces a
+             previous fake "Sales / Recurring / Service Fees" split with no real backing) */}
         <div className="bg-[#161923] border border-slate-800/80 rounded-[1.75rem] p-6 shadow-lg flex flex-col justify-between">
           <div className="flex justify-between items-center mb-5">
             <div>
-              <h3 className="text-sm font-black font-display text-white tracking-wide uppercase">Revenue</h3>
-              <p className="text-[11px] text-slate-400 font-medium mt-0.5">Stream segments and sales achievements</p>
-            </div>
-            
-            <div className="relative">
-              <select 
-                value={selectedRevenuePeriod}
-                onChange={(e) => setSelectedRevenuePeriod(e.target.value)}
-                className="appearance-none bg-[#0f111a] hover:bg-slate-800/60 text-[10px] font-black uppercase text-slate-300 pl-3 pr-8 py-1.5 rounded-lg border border-slate-800 outline-none cursor-pointer"
-              >
-                <option value="Weekly">Weekly</option>
-                <option value="Monthly">Monthly</option>
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-500 pointer-events-none" />
+              <h3 className="text-sm font-black font-display text-white tracking-wide uppercase">Revenue Collection</h3>
+              <p className="text-[11px] text-slate-400 font-medium mt-0.5">Paid vs unpaid share of total invoiced amount</p>
             </div>
           </div>
 
           {/* Donut Chart with central achievement value */}
           <div className="h-52 w-full flex items-center justify-center relative font-sans">
+            {revenueDonutData.length === 0 ? (
+              <div className="text-[11px] text-slate-500 font-mono">কোনো ডাটা নেই</div>
+            ) : (
+            <>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -489,29 +490,32 @@ export default function FinanceDashboard({
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#334155', borderRadius: '12px' }}
+                  itemStyle={{ color: '#fff', fontSize: '11px' }}
+                  formatter={(value: any) => [`$${Number(value).toLocaleString()}`, '']}
+                />
               </PieChart>
             </ResponsiveContainer>
             
             {/* Center Absolute Label */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-2xl font-black text-white font-display">90%</span>
-              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Achieved</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-2xl font-black text-white font-display">{collectionRateVal}%</span>
+              <span className="text-[9px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Collected</span>
             </div>
+            </>
+            )}
           </div>
 
           {/* Segments custom legends at bottom */}
           <div className="flex gap-4 justify-center items-center mt-4 border-t border-slate-800/30 pt-3 text-[10px] font-bold">
             <div className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-[#10b981]"></span>
-              <span className="text-slate-400">Sales</span>
+              <span className="text-slate-400">Paid (${totalRevenueVal.toLocaleString()})</span>
             </div>
             <div className="flex items-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-[#f59e0b]"></span>
-              <span className="text-slate-400">Recurring</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="h-2 w-2 rounded-full bg-[#8b5cf6]"></span>
-              <span className="text-slate-400">Service Fees</span>
+              <span className="text-slate-400">Unpaid (${unpaidTotal.toLocaleString()})</span>
             </div>
           </div>
         </div>
@@ -524,20 +528,13 @@ export default function FinanceDashboard({
               <p className="text-[11px] text-slate-400 font-medium mt-0.5">Operating yield percentages vs cash totals</p>
             </div>
             
-            <div className="relative">
-              <select 
-                value={selectedExpensesPeriod}
-                onChange={(e) => setSelectedExpensesPeriod(e.target.value)}
-                className="appearance-none bg-[#0f111a] hover:bg-slate-800/60 text-[10px] font-black uppercase text-slate-300 pl-3 pr-8 py-1.5 rounded-lg border border-slate-800 outline-none cursor-pointer"
-              >
-                <option value="2026">2026</option>
-                <option value="2025">2025</option>
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-500 pointer-events-none" />
-            </div>
+            <div className="text-[11px] font-extrabold text-slate-500 font-mono">Last 6 Months</div>
           </div>
 
           <div className="h-52 w-full font-sans">
+            {profitMarginVsSalesData.length === 0 ? (
+              <div className="h-full flex items-center justify-center text-[11px] text-slate-500 font-mono">কোনো ডাটা নেই</div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={profitMarginVsSalesData.slice(-6)} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#222533" vertical={false} />
@@ -563,6 +560,7 @@ export default function FinanceDashboard({
                 <Line type="monotone" dataKey="Sales" stroke="#10b981" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
+            )}
           </div>
 
           {/* Line Legend */}
@@ -586,20 +584,14 @@ export default function FinanceDashboard({
               <p className="text-[11px] text-slate-400 font-medium mt-0.5">Operating overhead divisions</p>
             </div>
             
-            <div className="relative">
-              <select 
-                value={selectedExpensesPeriod}
-                onChange={(e) => setSelectedExpensesPeriod(e.target.value)}
-                className="appearance-none bg-[#0f111a] hover:bg-slate-800/60 text-[10px] font-black uppercase text-slate-300 pl-3 pr-8 py-1.5 rounded-lg border border-slate-800 outline-none cursor-pointer"
-              >
-                <option value="2026">2026</option>
-                <option value="2025">2025</option>
-              </select>
-              <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-slate-500 pointer-events-none" />
-            </div>
+            <div className="text-[11px] font-extrabold text-slate-500 font-mono">All Time</div>
           </div>
 
           <div className="h-52 w-full flex items-center justify-center relative font-sans">
+            {expensesDonutData.length === 0 ? (
+              <div className="text-[11px] text-slate-500 font-mono">কোনো খরচ রেকর্ড নেই</div>
+            ) : (
+            <>
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -615,31 +607,34 @@ export default function FinanceDashboard({
                     <Cell key={`cell-${index}`} fill={entry.color} />
                   ))}
                 </Pie>
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#0b0c10', borderColor: '#334155', borderRadius: '12px' }}
+                  itemStyle={{ color: '#fff', fontSize: '11px' }}
+                  formatter={(value: any) => [`$${Number(value).toLocaleString()}`, '']}
+                />
               </PieChart>
             </ResponsiveContainer>
             
-            {/* Center Absolute Label */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center">
-              <span className="text-xl font-black text-white font-display">50%</span>
-              <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">Salaries</span>
+            {/* Center Absolute Label — top real expense category */}
+            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+              <span className="text-xl font-black text-white font-display">{expensesDonutData[0].percentage}%</span>
+              <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider mt-0.5">{expensesDonutData[0].name}</span>
             </div>
+            </>
+            )}
           </div>
 
-          {/* Grid display legends on right of donut matching the layout */}
-          <div className="grid grid-cols-3 gap-2 mt-4 border-t border-slate-800/30 pt-3 text-[10px] font-bold text-center">
-            <div className="p-1 rounded bg-orange-500/5 border border-orange-500/10 flex flex-col items-center">
-              <span className="text-[#f97316]">Salaries</span>
-              <span className="text-white mt-0.5">50%</span>
+          {/* Grid display legends — real transaction categories */}
+          {expensesDonutData.length > 0 && (
+            <div className="grid grid-cols-3 gap-2 mt-4 border-t border-slate-800/30 pt-3 text-[10px] font-bold text-center">
+              {expensesDonutData.map((cat, idx) => (
+                <div key={idx} className="p-1 rounded border flex flex-col items-center" style={{ backgroundColor: `${cat.color}0d`, borderColor: `${cat.color}20` }}>
+                  <span style={{ color: cat.color }} className="truncate w-full">{cat.name}</span>
+                  <span className="text-white mt-0.5">{cat.percentage}%</span>
+                </div>
+              ))}
             </div>
-            <div className="p-1 rounded bg-purple-500/5 border border-purple-500/10 flex flex-col items-center">
-              <span className="text-[#a855f7]">Marketing</span>
-              <span className="text-white mt-0.5">30%</span>
-            </div>
-            <div className="p-1 rounded bg-emerald-500/5 border border-emerald-500/10 flex flex-col items-center">
-              <span className="text-[#10b981]">Misc</span>
-              <span className="text-white mt-0.5">20%</span>
-            </div>
-          </div>
+          )}
         </div>
       </div>
 
@@ -648,7 +643,7 @@ export default function FinanceDashboard({
         <div className="flex justify-between items-center mb-6">
           <div>
             <h3 className="text-sm font-black font-display text-white tracking-wide uppercase">Recent Payments</h3>
-            <p className="text-[11px] text-slate-400 font-medium mt-0.5">Chronological double-entry cash records & reconciliation</p>
+            <p className="text-[11px] text-slate-400 font-medium mt-0.5">Most recent recorded expense transactions</p>
           </div>
           <button 
             onClick={() => onTabChange('accounting', 'journal_entries')}
@@ -666,19 +661,16 @@ export default function FinanceDashboard({
               <tr className="border-b border-slate-800/80">
                 <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider rounded-l-xl">Payment ID</th>
                 <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Date</th>
-                <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Payee</th>
+                <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Category</th>
                 <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Description</th>
-                <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Invoice ID</th>
                 <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Amount</th>
-                <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Bank & Account</th>
-                <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider">Method</th>
-                <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider rounded-r-xl">Status</th>
+                <th className="bg-[#1e2335]/40 text-[#06b6d4] border border-slate-800/40 px-4.5 py-3 text-left text-[10px] font-black uppercase tracking-wider rounded-r-xl">Bank & Account</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800/50">
               {paymentsData.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="py-12 text-center text-slate-500 text-xs">
+                  <td colSpan={6} className="py-12 text-center text-slate-500 text-xs">
                     কোনো পেমেন্ট বিবরণ পাওয়া যায়নি (No payment logs available)
                   </td>
                 </tr>
@@ -689,28 +681,12 @@ export default function FinanceDashboard({
                     <td className="px-4.5 py-3.5 text-xs text-slate-400 font-medium">{row.date}</td>
                     <td className="px-4.5 py-3.5 text-xs">
                       <span className="inline-block bg-emerald-500/10 border border-emerald-500/15 text-emerald-400 font-bold px-2.5 py-1 rounded-md">
-                        {row.payee}
+                        {row.category}
                       </span>
                     </td>
                     <td className="px-4.5 py-3.5 text-xs text-slate-300 font-medium">{row.desc}</td>
-                    <td className="px-4.5 py-3.5 text-xs">
-                      <span className="text-[#3b82f6] hover:underline font-mono font-bold cursor-pointer">
-                        {row.invoiceId}
-                      </span>
-                    </td>
                     <td className="px-4.5 py-3.5 text-xs font-black text-emerald-400">${row.amount.toLocaleString()}</td>
                     <td className="px-4.5 py-3.5 text-xs font-mono font-bold text-[#3b82f6]">{row.bank}</td>
-                    <td className="px-4.5 py-3.5 text-xs">
-                      <span className="inline-block bg-[#06b6d4]/10 border border-[#06b6d4]/15 text-[#06b6d4] font-black px-2 py-0.5 rounded-md text-[10px] uppercase">
-                        {row.method}
-                      </span>
-                    </td>
-                    <td className="px-4.5 py-3.5 text-xs">
-                      <span className="inline-flex items-center gap-1 text-emerald-400 font-extrabold">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        <span>{row.status}</span>
-                      </span>
-                    </td>
                   </tr>
                 ))
               )}
