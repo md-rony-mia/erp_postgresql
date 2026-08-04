@@ -372,8 +372,8 @@ export default function UniversalCrudEngine({
       recordName,
       details,
       changes,
-      ipAddress: `192.168.12.${Math.floor(Math.random() * 254) + 1}`,
-      browser: 'Chrome 124.0.0 Enterprise Secure Link',
+      ipAddress: 'Not captured (client-side)',
+      browser: typeof navigator !== 'undefined' ? navigator.userAgent : 'Unknown',
     };
     const updatedAudits = [newEntry, ...auditLogs];
     syncAuditLogs(updatedAudits);

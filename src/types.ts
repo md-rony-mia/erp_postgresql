@@ -71,6 +71,7 @@ export interface Product {
   abcClass?: 'A' | 'B' | 'C';
   xyzClass?: 'X' | 'Y' | 'Z';
   stockFreeze?: boolean;
+  brand?: string;
 }
 
 export interface Customer {

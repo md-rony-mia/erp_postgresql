@@ -410,8 +410,8 @@ export default function AccountingView({
               <tbody className="divide-y divide-slate-100">
                 {transactions.slice().reverse().map((t) => (
                   <tr key={t.id} className="hover:bg-slate-50/30 transition-colors">
-                    <td className="py-3.5 px-6 text-slate-500 font-medium">{t.date || '2026-07-06'}</td>
-                    <td className="py-3.5 px-6 font-mono font-bold text-indigo-600">{t.referenceNo || `JV-10${Math.floor(Math.random() * 90) + 10}`}</td>
+                    <td className="py-3.5 px-6 text-slate-500 font-medium">{t.date || 'N/A'}</td>
+                    <td className="py-3.5 px-6 font-mono font-bold text-indigo-600">{t.referenceNo || `JV-${String(t.id || '').slice(-4).toUpperCase().padStart(4, '0')}`}</td>
                     <td className="py-3.5 px-6 font-bold text-slate-800">{t.description}</td>
                     <td className="py-3.5 px-6 text-slate-500 font-semibold">{t.category}</td>
                     <td className="py-3.5 px-6 text-right">

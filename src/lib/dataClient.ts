@@ -313,10 +313,22 @@ export function subscribeToCollection<T>(collectionName: string, onUpdate: (item
   };
 }
 
+// Demo/sample data is only auto-inserted into empty collections when explicitly
+// enabled. Left unset (the default for a real production deployment), every
+// collection starts genuinely empty instead of silently filling up with sample
+// products/customers/invoices/etc. the first time someone opens a fresh database.
+const DEMO_SEED_ENABLED =
+  typeof import.meta !== 'undefined' &&
+  (import.meta as any).env?.VITE_ENABLE_DEMO_SEED === 'true';
+
 export async function seedCollectionIfEmpty<T extends { id: string }>(
   collectionName: string,
   initialData: T[]
 ): Promise<T[]> {
+  if (!DEMO_SEED_ENABLED) {
+    // Just read whatever is really in the database — no fabricated fallback rows.
+    return fetchCollectionFromFirestore<T>(collectionName);
+  }
   try {
     const body = await apiFetch(`/data/${collectionName}/seed`, {
       method: 'POST',

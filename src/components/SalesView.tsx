@@ -1154,12 +1154,11 @@ export default function SalesView({
                       {cart.map((item, idx) => {
                         const isSelected = selectedCartItemIndex === idx;
                         const p = products.find(prod => prod.id === item.productId);
-                        // Make showroom dummy attributes for ceramic layout matching
-                        const sizeAttr = p?.sku.includes('BAR') ? '12mm' : p?.sku.includes('CEM') ? 'Bags' : '12x24';
+                        const sizeAttr = p?.unit || 'N/A';
                         const boxPcsAttr = p?.pcsPerBox && p.pcsPerBox > 1
                           ? formatBoxQty(item.quantity, p.pcsPerBox)
-                          : (p?.sku.includes('BAR') ? 'Tons' : '1/10');
-                        const classAttr = p?.price && p.price > 1000 ? 'A Grade' : 'B Grade';
+                          : 'N/A';
+                        const classAttr = p?.abcClass ? `${p.abcClass} Grade` : 'Unclassified';
                         const rateDiscount = item.discount !== undefined ? item.discount : 0;
                         const netRate = item.netRate !== undefined ? item.netRate : (item.price - rateDiscount);
 
@@ -1546,11 +1545,10 @@ export default function SalesView({
                         .filter(p => isProductVisibleInBranch(p, currentBranchId, branches))
                         .filter(p => p.name.toLowerCase().includes(prodPopupSearch.toLowerCase()) || p.sku.toLowerCase().includes(prodPopupSearch.toLowerCase()))
                         .map((p) => {
-                          // Make showroom ceramic brand prefixes dynamically
-                          const brand = p.name.includes('cement') ? 'DBL' : p.sku.includes('BAR') ? 'China' : 'Akij Ceramics';
+                          const brand = p.brand || 'N/A';
                           const brandInfo = `${p.sku} - ${p.name}`;
-                          const cls = p.price > 1000 ? 'Class A' : 'Class B';
-                          const size = p.sku.includes('CEM') ? 'Bags' : p.sku.includes('BAR') ? '12mm' : '12x24';
+                          const cls = p.abcClass ? `Class ${p.abcClass}` : 'Unclassified';
+                          const size = p.unit || 'N/A';
 
                           return (
                             <tr
