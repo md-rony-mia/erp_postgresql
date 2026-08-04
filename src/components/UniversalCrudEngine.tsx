@@ -44,7 +44,7 @@ import {
   Sparkles
 } from 'lucide-react';
 import MetadataFormEngine from './MetadataFormEngine';
-import { seedCollectionIfEmpty, syncCollectionToFirestore } from '../lib/dataClient';
+import { seedCollectionIfEmpty, syncCollectionToFirestore, DEMO_SEED_ENABLED } from '../lib/dataClient';
 
 // ==========================================
 // UNIVERSAL CRUD SCHEMAS & TYPES
@@ -296,10 +296,12 @@ export default function UniversalCrudEngine({
               // Intentionally silent: legacy local saved CRUD parse error fallback
               console.error(e);
             }
-          } else {
+          } else if (DEMO_SEED_ENABLED) {
             const seed = initialSeedData || getSeedDataForModule(moduleKey);
             setData(seed);
             localStorage.setItem(`nexova_crud_${moduleKey}`, JSON.stringify(seed));
+          } else {
+            setData([]);
           }
         }
       } catch (err) {

@@ -21,6 +21,7 @@ import {
 import PageStandardsWrapper from './PageStandardsWrapper';
 import UniversalCrudEngine from './UniversalCrudEngine';
 import { LEADS_CONFIG, MEETINGS_CONFIG, CAMPAIGNS_CONFIG } from '../metadata/configs';
+import { DEMO_SEED_ENABLED } from '../lib/dataClient';
 
 interface CRMViewProps {
   activeSubTab?: string;
@@ -82,7 +83,7 @@ export default function CRMView({ activeSubTab = 'leads', currentUser }: CRMView
       let parsedLeads = [];
       if (rawLeads) {
         parsedLeads = JSON.parse(rawLeads);
-      } else {
+      } else if (DEMO_SEED_ENABLED) {
         parsedLeads = DEFAULT_LEADS;
         localStorage.setItem('nexova_crud_leads', JSON.stringify(DEFAULT_LEADS));
       }
@@ -93,7 +94,7 @@ export default function CRMView({ activeSubTab = 'leads', currentUser }: CRMView
       let parsedActivities = [];
       if (rawActivities) {
         parsedActivities = JSON.parse(rawActivities);
-      } else {
+      } else if (DEMO_SEED_ENABLED) {
         parsedActivities = DEFAULT_ACTIVITIES;
         localStorage.setItem('nexova_crm_activities', JSON.stringify(DEFAULT_ACTIVITIES));
       }

@@ -317,7 +317,7 @@ export function subscribeToCollection<T>(collectionName: string, onUpdate: (item
 // enabled. Left unset (the default for a real production deployment), every
 // collection starts genuinely empty instead of silently filling up with sample
 // products/customers/invoices/etc. the first time someone opens a fresh database.
-const DEMO_SEED_ENABLED =
+export const DEMO_SEED_ENABLED =
   typeof import.meta !== 'undefined' &&
   (import.meta as any).env?.VITE_ENABLE_DEMO_SEED === 'true';
 

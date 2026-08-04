@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Branch, BranchEnabledFeatures, BranchSharedFeatures } from '../types';
-import { subscribeToCollection, setDocById, updateDocById, deleteDocById } from '../lib/dataClient';
+import { subscribeToCollection, setDocById, updateDocById, deleteDocById, DEMO_SEED_ENABLED } from '../lib/dataClient';
 import {
   Building,
   Plus,
@@ -101,6 +101,23 @@ export const INITIAL_DEFAULT_BRANCHES: Branch[] = [
   },
 ];
 
+export const MINIMAL_BOOTSTRAP_BRANCH: Branch[] = [
+  {
+    id: 'main_hq',
+    name: 'Main Branch',
+    branchCode: 'HQ',
+    address: '',
+    phone: '',
+    managerName: '',
+    status: 'Active',
+    isMainBranch: true,
+    stockMode: 'shared',
+    enabledFeatures: DEFAULT_ENABLED_FEATURES,
+    sharedFeatures: DEFAULT_SHARED_FEATURES,
+    createdAt: new Date().toISOString(),
+  },
+];
+
 export default function BranchManagementView({ currentUser, onBranchChange }: BranchManagementViewProps) {
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -136,14 +153,15 @@ export default function BranchManagementView({ currentUser, onBranchChange }: Br
   }, []);
 
   const seedInitialBranches = async () => {
+    const branchesToSeed = DEMO_SEED_ENABLED ? INITIAL_DEFAULT_BRANCHES : MINIMAL_BOOTSTRAP_BRANCH;
     try {
-      for (const branch of INITIAL_DEFAULT_BRANCHES) {
+      for (const branch of branchesToSeed) {
         await setDocById('branches', branch.id, branch);
       }
-      setBranches(INITIAL_DEFAULT_BRANCHES);
+      setBranches(branchesToSeed);
     } catch (e) {
       console.warn('Could not seed initial branches:', e);
-      setBranches(INITIAL_DEFAULT_BRANCHES);
+      setBranches(branchesToSeed);
     }
   };
 
