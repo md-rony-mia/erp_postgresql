@@ -106,10 +106,10 @@ export default function ProjectsView({ activeSubTab = 'projects', currentUser }:
   const [loading, setLoading] = useState(true);
   
   const [metrics, setMetrics] = useState({
-    totalBudget: 6550000,
-    totalProjects: 3,
-    highPriority: 1,
-    activeStage: 2
+    totalBudget: 0,
+    totalProjects: 0,
+    highPriority: 0,
+    activeStage: 0
   });
 
   const loadData = async () => {
@@ -167,10 +167,10 @@ export default function ProjectsView({ activeSubTab = 'projects', currentUser }:
       const totalBudget = (parsedProjs || []).reduce((sum, p) => sum + (Number(p.budget) || 0), 0);
       const totalProjects = (parsedProjs || []).length;
       const highPriority = (parsedTasks || []).filter(t => t.priority === 'High' && t.status !== 'Completed').length;
-      const activeStage = (parsedProjs || []).filter(p => p.stage === 'Active' || p.stage === 'In Progress').length || 2;
+      const activeStage = (parsedProjs || []).filter(p => p.stage === 'Active' || p.stage === 'In Progress').length;
 
       setMetrics({
-        totalBudget: totalBudget || 6550000,
+        totalBudget,
         totalProjects,
         highPriority,
         activeStage

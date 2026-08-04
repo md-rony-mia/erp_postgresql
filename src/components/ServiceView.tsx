@@ -124,10 +124,10 @@ export default function ServiceView({ activeSubTab = 'warranty', currentUser }: 
   const [loading, setLoading] = useState(true);
 
   const [metrics, setMetrics] = useState({
-    totalClaims: 3,
-    activeRepairs: 2,
-    remediationCost: 57000,
-    slaCompliance: '98.6%'
+    totalClaims: 0,
+    activeRepairs: 0,
+    remediationCost: 0,
+    slaCompliance: 'N/A'
   });
 
   const loadData = async () => {
@@ -198,11 +198,17 @@ export default function ServiceView({ activeSubTab = 'warranty', currentUser }: 
       const activeRepairs = (parsedRep || []).filter(r => r.stage !== 'Dispatched').length;
       const remediationCost = (parsedRep || []).reduce((sum, r) => sum + (Number(r.costEstimate) || 0), 0);
 
+      const totalComplaintsForSla = (parsedComp || []).length;
+      const resolvedComplaints = (parsedComp || []).filter(c => c.status === 'Resolved').length;
+      const slaCompliance = totalComplaintsForSla > 0
+        ? `${((resolvedComplaints / totalComplaintsForSla) * 100).toFixed(1)}%`
+        : 'N/A';
+
       setMetrics({
         totalClaims,
         activeRepairs,
         remediationCost,
-        slaCompliance: '98.6%'
+        slaCompliance
       });
     } catch (e: any) {
       console.error(e);

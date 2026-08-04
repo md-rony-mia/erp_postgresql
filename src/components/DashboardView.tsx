@@ -307,16 +307,30 @@ export default function DashboardView({
   // Custom tooltips state for charts
   const [salesHoverIndex, setSalesHoverIndex] = useState<number | null>(null);
 
-  // 7 days sales data
-  const sales7Days = [
-    { date: '30 Jun', sales: 0 },
-    { date: '01 Jul', sales: 0 },
-    { date: '02 Jul', sales: 0 },
-    { date: '03 Jul', sales: 0 },
-    { date: '04 Jul', sales: 0 },
-    { date: '05 Jul', sales: 0 },
-    { date: '06 Jul', sales: invoices.length > 4 ? invoices[invoices.length - 1].total : 21518 },
-  ];
+  // 7 days sales data — computed from real invoices, no fabricated fallback values
+  const sales7Days = (() => {
+    const days: { date: string; sales: number }[] = [];
+    const today = new Date();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const label = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+      const dayTotal = invoices.reduce((sum, inv) => {
+        const invD = new Date(inv.date);
+        if (
+          !isNaN(invD.getTime()) &&
+          invD.getFullYear() === d.getFullYear() &&
+          invD.getMonth() === d.getMonth() &&
+          invD.getDate() === d.getDate()
+        ) {
+          return sum + (inv.total || 0);
+        }
+        return sum;
+      }, 0);
+      days.push({ date: label, sales: dayTotal });
+    }
+    return days;
+  })();
 
   // Helper to format currency
   const formatCurrency = (val: number) => {
@@ -1260,9 +1274,9 @@ export default function DashboardView({
         if (sectionId === 'analytics') {
           // Asymmetric visual configuration: 2/3 Area Chart + 1/3 Stacked Comparison Bars
           const comparativeData = [
-            { name: 'Revenue', value: totalRevenue || 35000, fill: '#10b981' },
-            { name: 'Receivables', value: totalReceivables || 15000, fill: '#14b8a6' },
-            { name: 'Payables', value: totalPayables || 8000, fill: '#f97316' },
+            { name: 'Revenue', value: totalRevenue, fill: '#10b981' },
+            { name: 'Receivables', value: totalReceivables, fill: '#14b8a6' },
+            { name: 'Payables', value: totalPayables, fill: '#f97316' },
           ];
           
           return (

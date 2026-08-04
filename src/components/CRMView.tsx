@@ -68,10 +68,10 @@ export default function CRMView({ activeSubTab = 'leads', currentUser }: CRMView
   const [leads, setLeads] = useState<any[]>([]);
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [metrics, setMetrics] = useState({
-    pipelineValue: 1740000,
-    totalLeads: 4,
-    wonDeals: 1,
-    campaignsCount: 2
+    pipelineValue: 0,
+    totalLeads: 0,
+    wonDeals: 0,
+    campaignsCount: 0
   });
 
   // Load and sync data across tabs
@@ -107,10 +107,10 @@ export default function CRMView({ activeSubTab = 'leads', currentUser }: CRMView
       const pipelineValue = parsedLeads.reduce((sum: number, l: any) => sum + (Number(l.value) || 0), 0);
       const totalLeads = parsedLeads.length;
       const wonDeals = parsedLeads.filter((l: any) => l.status === 'Approved' || l.status === 'Closed Won').length;
-      const campaignsCount = campaigns.length || 2;
+      const campaignsCount = campaigns.length;
 
       setMetrics({
-        pipelineValue: pipelineValue || 1740000,
+        pipelineValue,
         totalLeads,
         wonDeals,
         campaignsCount

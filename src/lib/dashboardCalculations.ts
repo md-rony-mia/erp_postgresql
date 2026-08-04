@@ -271,17 +271,11 @@ export function getRevenueTrendData(invoices: Invoice[], range: DateRangeType = 
       }
     });
 
-    // If invoices dataset is sparse, provide sensible smooth historical progression
-    if (rev === 0 && i > 0) {
-      const baseRev = invoices.reduce((s, x) => s + x.total, 0) || 120000;
-      rev = Math.round((baseRev / 12) * (0.8 + Math.sin(i) * 0.3));
-    }
-
     monthlyData.push({
       name: label,
       Revenue: Math.round(rev),
       Profit: Math.round(rev * 0.32),
-      Invoices: invCount || Math.floor(rev / 5000),
+      Invoices: invCount,
     });
   }
 
