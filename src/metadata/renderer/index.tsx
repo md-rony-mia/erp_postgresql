@@ -691,61 +691,50 @@ export const DynamicFormRenderer: React.FC<DynamicFormRendererProps> = ({
                                       )}
                                     </div>
                                   ))}
-                                  {(!fieldValue || String(fieldValue).split(',').filter(Boolean).length < 4) && !isReadonly && (
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const current = String(fieldValue).split(',').filter(Boolean);
-                                        const sampleImages = [
-                                          'https://images.unsplash.com/photo-1518770660439-4636190af475?q=80&w=200&auto=format&fit=crop',
-                                          'https://images.unsplash.com/photo-1581092160607-ee22621dd758?q=80&w=200&auto=format&fit=crop',
-                                          'https://images.unsplash.com/photo-1562157873-818bc0726f68?q=80&w=200&auto=format&fit=crop',
-                                        ];
-                                        const nextIdx = current.length % sampleImages.length;
-                                        const updated = [...current, sampleImages[nextIdx]];
-                                        handleFieldChange(field.fieldKey, updated.join(','));
-                                      }}
-                                      className="aspect-square border border-dashed border-slate-300 hover:border-indigo-500 rounded flex flex-col items-center justify-center text-[10px] text-slate-400 font-bold hover:text-indigo-600 bg-white transition-colors cursor-pointer"
-                                    >
-                                      <LucideIcons.Plus className="w-4 h-4 mb-1" />
-                                      <span>Add Sample</span>
-                                    </button>
-                                  )}
                                 </div>
+                                {!isReadonly && (
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="text"
+                                      placeholder="Paste image URL and press Enter..."
+                                      className="flex-1 bg-white border border-slate-200 rounded p-1.5 text-[11px] focus:outline-none font-mono"
+                                      onKeyDown={(e) => {
+                                        const target = e.target as HTMLInputElement;
+                                        if (e.key === 'Enter' && target.value.trim()) {
+                                          e.preventDefault();
+                                          const current = String(fieldValue).split(',').filter(Boolean);
+                                          handleFieldChange(field.fieldKey, [...current, target.value.trim()].join(','));
+                                          target.value = '';
+                                        }
+                                      }}
+                                    />
+                                  </div>
+                                )}
                               </div>
                             )}
 
                             {/* FILE UPLOAD */}
                             {(field.fieldType === 'File' || (field.fieldType as string) === 'File Upload') && (
-                              <div className="border border-slate-200/80 rounded-lg p-3 bg-slate-50/40 flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg">
-                                    <LucideIcons.File className="w-5 h-5" />
+                              <div className="border border-slate-200/80 rounded-lg p-3 bg-slate-50/40 space-y-2">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="p-2 bg-indigo-50 text-indigo-700 rounded-lg shrink-0">
+                                      <LucideIcons.File className="w-5 h-5" />
+                                    </div>
+                                    <div className="space-y-0.5 min-w-0">
+                                      <p className="text-[11px] font-bold text-slate-700 truncate max-w-[150px]">
+                                        {fieldValue ? String(fieldValue).split('/').pop() : 'No file linked'}
+                                      </p>
+                                    </div>
                                   </div>
-                                  <div className="space-y-0.5">
-                                    <p className="text-[11px] font-bold text-slate-700 truncate max-w-[150px]">
-                                      {fieldValue ? String(fieldValue).split('/').pop() : 'spec_datasheet_rev4.docx'}
-                                    </p>
-                                    <p className="text-[9px] text-slate-400 font-medium">1.8 MB • DOCX Format</p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  {!fieldValue ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleFieldChange(field.fieldKey, 'https://example.com/spec_datasheet_rev4.docx')}
-                                      className="px-2 py-1 bg-white hover:bg-slate-50 text-[10px] text-indigo-600 font-bold border border-slate-200 rounded cursor-pointer"
-                                    >
-                                      Attach Sample
-                                    </button>
-                                  ) : (
-                                    <>
+                                  {fieldValue && (
+                                    <div className="flex items-center gap-1.5 shrink-0">
                                       <a
                                         href={fieldValue}
                                         target="_blank"
                                         rel="noreferrer"
                                         className="p-1 hover:bg-slate-200 text-slate-600 rounded"
-                                        title="Download Reference"
+                                        title="Open Document"
                                       >
                                         <LucideIcons.Download className="w-3.5 h-3.5" />
                                       </a>
@@ -759,37 +748,37 @@ export const DynamicFormRenderer: React.FC<DynamicFormRendererProps> = ({
                                           <LucideIcons.Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                       )}
-                                    </>
+                                    </div>
                                   )}
                                 </div>
+                                {!isReadonly && (
+                                  <input
+                                    type="text"
+                                    placeholder="Paste document URL (e.g. Google Drive share link)..."
+                                    value={fieldValue || ''}
+                                    onChange={(e) => handleFieldChange(field.fieldKey, e.target.value)}
+                                    className="w-full bg-white border border-slate-200 rounded p-1.5 text-[11px] focus:outline-none font-mono"
+                                  />
+                                )}
                               </div>
                             )}
 
                             {/* PDF UPLOAD */}
                             {(field.fieldType === 'PDF' || (field.fieldType as string) === 'PDF Upload') && (
-                              <div className="border border-slate-200/80 rounded-lg p-3 bg-slate-50/40 flex items-center justify-between gap-3">
-                                <div className="flex items-center gap-2.5">
-                                  <div className="p-2 bg-rose-50 text-rose-700 rounded-lg border border-rose-100">
-                                    <LucideIcons.FileText className="w-5 h-5" />
+                              <div className="border border-slate-200/80 rounded-lg p-3 bg-slate-50/40 space-y-2">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2.5 min-w-0">
+                                    <div className="p-2 bg-rose-50 text-rose-700 rounded-lg border border-rose-100 shrink-0">
+                                      <LucideIcons.FileText className="w-5 h-5" />
+                                    </div>
+                                    <div className="space-y-0.5 min-w-0">
+                                      <p className="text-[11px] font-bold text-slate-700 truncate max-w-[150px]">
+                                        {fieldValue ? String(fieldValue).split('/').pop() : 'No PDF linked'}
+                                      </p>
+                                    </div>
                                   </div>
-                                  <div className="space-y-0.5">
-                                    <p className="text-[11px] font-bold text-slate-700 truncate max-w-[150px]">
-                                      {fieldValue ? String(fieldValue).split('/').pop() : 'iso_9001_certification_standard.pdf'}
-                                    </p>
-                                    <p className="text-[9px] text-rose-600 font-semibold bg-rose-50 border border-rose-100 px-1 rounded w-max">PDF DOCUMENT</p>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-1.5">
-                                  {!fieldValue ? (
-                                    <button
-                                      type="button"
-                                      onClick={() => handleFieldChange(field.fieldKey, 'https://example.com/iso_9001_certification_standard.pdf')}
-                                      className="px-2.5 py-1 bg-white hover:bg-slate-50 text-[10px] text-rose-600 font-bold border border-slate-200 rounded cursor-pointer"
-                                    >
-                                      Attach PDF
-                                    </button>
-                                  ) : (
-                                    <>
+                                  {fieldValue && (
+                                    <div className="flex items-center gap-1.5 shrink-0">
                                       <a
                                         href={fieldValue}
                                         target="_blank"
@@ -809,9 +798,18 @@ export const DynamicFormRenderer: React.FC<DynamicFormRendererProps> = ({
                                           <LucideIcons.Trash2 className="w-3.5 h-3.5" />
                                         </button>
                                       )}
-                                    </>
+                                    </div>
                                   )}
                                 </div>
+                                {!isReadonly && (
+                                  <input
+                                    type="text"
+                                    placeholder="Paste PDF URL (e.g. Google Drive share link)..."
+                                    value={fieldValue || ''}
+                                    onChange={(e) => handleFieldChange(field.fieldKey, e.target.value)}
+                                    className="w-full bg-white border border-slate-200 rounded p-1.5 text-[11px] focus:outline-none font-mono"
+                                  />
+                                )}
                               </div>
                             )}
 
