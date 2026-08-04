@@ -20,7 +20,6 @@ import {
   ExternalLink,
   ChevronRight,
   Globe,
-  Plus,
   Trash2,
   Check,
 } from 'lucide-react';
@@ -112,7 +111,6 @@ export default function SalesDashboard({
       name: cust.name,
       id: cust.id,
       spent: customerSpent[cust.id] || 0,
-      avatar: `https://images.unsplash.com/photo-${cust.id.charCodeAt(0) % 2 === 0 ? '1534528741775-53994a69daeb' : '1507003211169-0a1dd7228f2d'}?auto=format&fit=crop&w=100&q=80`
     }))
     .sort((a, b) => b.spent - a.spent)
     .slice(0, 5);
@@ -147,7 +145,6 @@ export default function SalesDashboard({
       status: inv.isPaid ? 'Paid' : 'Pending',
       amount: inv.total,
       date: new Date(inv.date).toLocaleDateString('bn-BD', { day: '2-digit', month: 'short', year: 'numeric' }),
-      avatar: `https://images.unsplash.com/photo-${inv.id.charCodeAt(0) % 2 === 0 ? '1519085360753-af0119f7cbe7' : '1524504388940-b1c1722653e1'}?auto=format&fit=crop&w=100&q=80`
     }));
 
   const recentSalesActivity = [...invoices]
@@ -160,8 +157,12 @@ export default function SalesDashboard({
       amount: inv.total,
       date: new Date(inv.date).toLocaleDateString('bn-BD', { day: '2-digit', month: 'short', year: 'numeric' }),
       status: inv.isPaid ? 'Paid' : 'Pending',
-      avatar: `https://images.unsplash.com/photo-${inv.id.charCodeAt(0) % 2 === 0 ? '1519085360753-af0119f7cbe7' : '1524504388940-b1c1722653e1'}?auto=format&fit=crop&w=100&q=80`
     }));
+
+  // Generates a stable initials avatar (e.g. "Rahim Uddin" -> "RU") instead of a random
+  // stock photo -- there's no real per-customer photo stored anywhere in the system.
+  const initialsOf = (name: string) =>
+    (name || '').trim().split(/\s+/).map((n) => n[0]).join('').slice(0, 2).toUpperCase() || '?';
 
   // Helper for dynamic product icon render
   const renderProductIcon = (type: string) => {
@@ -197,27 +198,6 @@ export default function SalesDashboard({
 
         {/* Header Right Action Items */}
         <div className="flex flex-wrap items-center gap-3">
-          {/* Active Teammates Overlapping Avatars */}
-          <div className="flex items-center -space-x-2 mr-2">
-            <img
-              className="inline-block h-8 w-8 rounded-full ring-2 ring-[#0c0d12] object-cover"
-              src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=100&q=80"
-              alt="team"
-            />
-            <img
-              className="inline-block h-8 w-8 rounded-full ring-2 ring-[#0c0d12] object-cover"
-              src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=100&q=80"
-              alt="team"
-            />
-            <img
-              className="inline-block h-8 w-8 rounded-full ring-2 ring-[#0c0d12] object-cover"
-              src="https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=100&q=80"
-              alt="team"
-            />
-            <button className="h-8 w-8 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-white text-xs hover:bg-slate-700 transition-colors cursor-pointer">
-              <Plus className="h-4 w-4" />
-            </button>
-          </div>
 
           {/* Date Picker Button */}
           <div className="relative">
@@ -535,11 +515,9 @@ export default function SalesDashboard({
               topCustomers.map((cust, i) => (
                 <div key={i} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <img
-                      className="h-9 w-9 rounded-full object-cover border border-slate-800"
-                      src={cust.avatar}
-                      alt={cust.name}
-                    />
+                    <div className="h-9 w-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[11px] font-black text-slate-300 shrink-0">
+                      {initialsOf(cust.name)}
+                    </div>
                     <div>
                       <p className="text-xs font-bold text-white">{cust.name}</p>
                       <p className="text-[10px] text-slate-500 font-mono mt-0.5">{cust.id}</p>
@@ -628,11 +606,9 @@ export default function SalesDashboard({
               recentTransactions.map((tx, i) => (
                 <div key={i} className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <img
-                      className="h-9 w-9 rounded-full object-cover border border-slate-800"
-                      src={tx.avatar}
-                      alt={tx.name}
-                    />
+                    <div className="h-9 w-9 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[11px] font-black text-slate-300 shrink-0">
+                      {initialsOf(tx.name)}
+                    </div>
                     <div>
                       <p className="text-xs font-bold text-white">{tx.name}</p>
                       <div className="flex items-center gap-1.5 mt-0.5">
@@ -706,11 +682,9 @@ export default function SalesDashboard({
                     <td className="py-4 px-4 text-slate-400 font-medium">{activity.type}</td>
                     <td className="py-4 px-4">
                       <div className="flex items-center gap-2.5">
-                        <img
-                          className="h-6 w-6 rounded-full object-cover border border-slate-800"
-                          src={activity.avatar}
-                          alt={activity.customer}
-                        />
+                        <div className="h-6 w-6 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[9px] font-black text-slate-300 shrink-0">
+                          {initialsOf(activity.customer)}
+                        </div>
                         <span className="font-bold text-white">{activity.customer}</span>
                       </div>
                     </td>
