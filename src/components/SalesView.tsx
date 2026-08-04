@@ -2475,7 +2475,7 @@ export default function SalesView({
           </div>
 
           {/* Historical Credit Note Ledger view */}
-          <div className="bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
+          {/* <div className="bg-white border border-slate-300 rounded shadow-sm overflow-hidden">
             <div className="bg-[#3f3f46] text-white px-3 py-1 font-mono text-[11px] font-bold flex items-center justify-between">
               <span>Sales Returns Ledger Archive (Historical Log)</span>
               <span className="text-[10px] text-slate-300">Comprehensive Return Logs</span>
@@ -2512,7 +2512,7 @@ export default function SalesView({
                 </tbody>
               </table>
             </div>
-          </div>
+          </div> */}
 
         </div>
       )}
