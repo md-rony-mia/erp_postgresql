@@ -453,6 +453,7 @@ function AppContent() {
         // 2. Subscribe to real-time updates for all 11 core collections + settings
         unsubs.push(
           subscribeToCollection<any>('settings', (docs) => {
+            hasLoadedOnceRef.current['settings'] = true;
             const appSettingsDoc = docs.find((d) => d.id === 'app');
             if (appSettingsDoc) {
               const { id, ...sanitizedSettings } = appSettingsDoc;
@@ -625,6 +626,7 @@ function AppContent() {
   // Synchronize changes to Firestore when states update, AFTER initial load is done!
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['settings']) return;
     if (isRemoteUpdateRef.current['settings']) {
       isRemoteUpdateRef.current['settings'] = false;
       return;
@@ -1466,55 +1468,8 @@ function AppContent() {
 
         {/* Dynamic content render views */}
         {(() => {
-          const userRole = (currentUser?.role || '').toLowerCase();
-          const isAdmin = !currentUser?.role || userRole === 'admin' || userRole === 'administrator';
-          let isBackupOverdue = false;
-          if (isAdmin) {
-            if (!settings?.lastBackupAt) {
-              isBackupOverdue = true;
-            } else {
-              const lastTime = new Date(settings.lastBackupAt).getTime();
-              if (isNaN(lastTime)) {
-                isBackupOverdue = true;
-              } else {
-                const daysElapsed = (Date.now() - lastTime) / (1000 * 60 * 60 * 24);
-                isBackupOverdue = daysElapsed >= 7;
-              }
-            }
-          }
-
           return (
             <main className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6 pb-20">
-              {/* Scheduled Backup Reminder Banner for Administrator */}
-              {/* {isBackupOverdue && (
-                <div className="bg-amber-50 border border-amber-200/80 rounded-xl p-3 px-4 flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900 shadow-xs animate-in fade-in">
-                  <div className="flex items-center gap-2.5">
-                    <div className="p-1.5 bg-amber-100 text-amber-700 rounded-lg shrink-0">
-                      <Save className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <span className="font-extrabold text-amber-800 uppercase tracking-wide text-[10px] block">
-                        Automatic Backup Reminder (শিডিউলড ব্যাকআপ রিমাইন্ডার)
-                      </span>
-                      <span className="font-medium">
-                        {settings?.lastBackupAt
-                          ? `সর্বশেষ ব্যাকআপ নেওয়া হয়েছিল ${Math.floor((Date.now() - new Date(settings.lastBackupAt).getTime()) / (1000 * 60 * 60 * 24))} দিন আগে (${new Date(settings.lastBackupAt).toLocaleDateString()})। ডাটা নিরাপত্তার জন্য নতুন একটি ব্যাকআপ ডাউনলোড করুন।`
-                          : 'এখনও পর্যন্ত কোনো ব্যাকআপ ডাউনলোড করা হয়নি। ডাটা নিরাপদ রাখতে এখন একটি ব্যাকআপ এক্সপোর্ট করুন।'}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      onClick={() => handleTabChange('banking', 'backup')}
-                      className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg text-xs shadow-xs transition-colors flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      <span>Export Backup Now</span>
-                    </button>
-                  </div>
-                </div>
-              )} */}
-
               {/* DEFAULT DESKTOP WORKSPACE (EXECUTIVE DASHBOARD) WHEN ALL WINDOWS ARE MINIMIZED */}
               {!hasActiveUnminimizedWindow && (
                 <div className="space-y-4 animate-in fade-in duration-200">
