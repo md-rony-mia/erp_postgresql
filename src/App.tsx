@@ -396,6 +396,13 @@ function AppContent() {
   // Track if a state change was triggered by a remote Firestore subscription update
   const isRemoteUpdateRef = useRef<Record<string, boolean>>({});
 
+  // Track whether each collection's first real snapshot has arrived yet. `loading` can flip
+  // to false before every subscribeToCollection() promise has resolved (it does not await
+  // them), so without this guard the sync-to-server effects below can fire with a collection
+  // still at its initial empty-array state and wipe out existing server data via syncCollection's
+  // delete-what's-missing semantics.
+  const hasLoadedOnceRef = useRef<Record<string, boolean>>({});
+
   // Firestore real-time subscriptions & seed effect
   useEffect(() => {
     if (!authChecked) return;
@@ -467,6 +474,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Product>('products', (items) => {
+            hasLoadedOnceRef.current['products'] = true;
             if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.products)) {
               isRemoteUpdateRef.current['products'] = true;
               setProducts(items || []);
@@ -476,6 +484,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Customer>('customers', (items) => {
+            hasLoadedOnceRef.current['customers'] = true;
             if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.customers)) {
               isRemoteUpdateRef.current['customers'] = true;
               setCustomers(items || []);
@@ -485,6 +494,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Supplier>('suppliers', (items) => {
+            hasLoadedOnceRef.current['suppliers'] = true;
             if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.suppliers)) {
               isRemoteUpdateRef.current['suppliers'] = true;
               setSuppliers(items || []);
@@ -494,6 +504,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Invoice>('invoices', (items) => {
+            hasLoadedOnceRef.current['invoices'] = true;
             if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.invoices)) {
               isRemoteUpdateRef.current['invoices'] = true;
               setInvoices(items || []);
@@ -503,6 +514,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<PurchaseOrder>('purchaseOrders', (items) => {
+            hasLoadedOnceRef.current['purchaseOrders'] = true;
             if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.purchaseOrders)) {
               isRemoteUpdateRef.current['purchaseOrders'] = true;
               setPurchaseOrders(items || []);
@@ -512,6 +524,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<BankAccount>('bankAccounts', (items) => {
+            hasLoadedOnceRef.current['bankAccounts'] = true;
             if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.bankAccounts)) {
               isRemoteUpdateRef.current['bankAccounts'] = true;
               setBankAccounts(items || []);
@@ -521,6 +534,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Transaction>('transactions', (items) => {
+            hasLoadedOnceRef.current['transactions'] = true;
             if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.transactions)) {
               isRemoteUpdateRef.current['transactions'] = true;
               setTransactions(items || []);
@@ -530,6 +544,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<AccountHead>('accountHeads', (items) => {
+            hasLoadedOnceRef.current['accountHeads'] = true;
             if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.accountHeads)) {
               isRemoteUpdateRef.current['accountHeads'] = true;
               setAccountHeads(items || []);
@@ -539,6 +554,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Employee>('employees', (items) => {
+            hasLoadedOnceRef.current['employees'] = true;
             if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.employees)) {
               isRemoteUpdateRef.current['employees'] = true;
               setEmployees(items || []);
@@ -548,6 +564,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<Attendance>('attendances', (items) => {
+            hasLoadedOnceRef.current['attendances'] = true;
             if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.attendances)) {
               isRemoteUpdateRef.current['attendances'] = true;
               setAttendances(items || []);
@@ -557,6 +574,7 @@ function AppContent() {
 
         unsubs.push(
           subscribeToCollection<LoanAccount>('loanAccounts', (items) => {
+            hasLoadedOnceRef.current['loanAccounts'] = true;
             if (JSON.stringify(items || []) !== JSON.stringify(latestStateRef.current.loanAccounts)) {
               isRemoteUpdateRef.current['loanAccounts'] = true;
               setLoanAccounts(items || []);
@@ -616,6 +634,7 @@ function AppContent() {
 
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['products']) return;
     if (isRemoteUpdateRef.current['products']) {
       isRemoteUpdateRef.current['products'] = false;
       return;
@@ -625,6 +644,7 @@ function AppContent() {
 
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['customers']) return;
     if (isRemoteUpdateRef.current['customers']) {
       isRemoteUpdateRef.current['customers'] = false;
       return;
@@ -634,6 +654,7 @@ function AppContent() {
 
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['suppliers']) return;
     if (isRemoteUpdateRef.current['suppliers']) {
       isRemoteUpdateRef.current['suppliers'] = false;
       return;
@@ -643,6 +664,7 @@ function AppContent() {
 
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['invoices']) return;
     if (isRemoteUpdateRef.current['invoices']) {
       isRemoteUpdateRef.current['invoices'] = false;
       return;
@@ -652,6 +674,7 @@ function AppContent() {
 
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['purchaseOrders']) return;
     if (isRemoteUpdateRef.current['purchaseOrders']) {
       isRemoteUpdateRef.current['purchaseOrders'] = false;
       return;
@@ -661,6 +684,7 @@ function AppContent() {
 
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['bankAccounts']) return;
     if (isRemoteUpdateRef.current['bankAccounts']) {
       isRemoteUpdateRef.current['bankAccounts'] = false;
       return;
@@ -670,6 +694,7 @@ function AppContent() {
 
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['transactions']) return;
     if (isRemoteUpdateRef.current['transactions']) {
       isRemoteUpdateRef.current['transactions'] = false;
       return;
@@ -679,6 +704,7 @@ function AppContent() {
 
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['accountHeads']) return;
     if (isRemoteUpdateRef.current['accountHeads']) {
       isRemoteUpdateRef.current['accountHeads'] = false;
       return;
@@ -688,6 +714,7 @@ function AppContent() {
 
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['employees']) return;
     if (isRemoteUpdateRef.current['employees']) {
       isRemoteUpdateRef.current['employees'] = false;
       return;
@@ -697,6 +724,7 @@ function AppContent() {
 
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['attendances']) return;
     if (isRemoteUpdateRef.current['attendances']) {
       isRemoteUpdateRef.current['attendances'] = false;
       return;
@@ -706,6 +734,7 @@ function AppContent() {
 
   useEffect(() => {
     if (loading || !currentUser) return;
+    if (!hasLoadedOnceRef.current['loanAccounts']) return;
     if (isRemoteUpdateRef.current['loanAccounts']) {
       isRemoteUpdateRef.current['loanAccounts'] = false;
       return;
