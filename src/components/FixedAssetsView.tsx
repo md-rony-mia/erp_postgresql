@@ -21,10 +21,10 @@ interface FixedAssetsViewProps {
 
 export default function FixedAssetsView({ activeSubTab = 'assets', currentUser }: FixedAssetsViewProps) {
   const [metrics, setMetrics] = useState({
-    totalValue: 12500000,
-    totalAssets: 4,
-    depreciationThisMonth: 185000,
-    maintenanceRequired: 1
+    totalValue: 0,
+    totalAssets: 0,
+    depreciationThisMonth: 0,
+    maintenanceRequired: 0
   });
 
   const loadMetrics = () => {
@@ -32,10 +32,10 @@ export default function FixedAssetsView({ activeSubTab = 'assets', currentUser }
       const raw = localStorage.getItem('nexova_crud_assets');
       const assets = raw ? JSON.parse(raw) : [];
 
-      const totalValue = assets.reduce((sum: number, a: any) => sum + (Number(a.purchasePrice) || 0), 0) || 12500000;
-      const totalAssets = assets.length || 4;
-      const depreciationThisMonth = Math.floor(totalValue * 0.015) || 185000;
-      const maintenanceRequired = assets.filter((a: any) => a.condition === 'In Maintenance').length || 1;
+      const totalValue = assets.reduce((sum: number, a: any) => sum + (Number(a.purchasePrice) || 0), 0);
+      const totalAssets = assets.length;
+      const depreciationThisMonth = Math.floor(totalValue * 0.015);
+      const maintenanceRequired = assets.filter((a: any) => a.condition === 'In Maintenance').length;
 
       setMetrics({
         totalValue,

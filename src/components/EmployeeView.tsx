@@ -105,10 +105,10 @@ export default function EmployeeView({
   });
 
   const [metrics, setMetrics] = useState({
-    totalEmployees: 4,
-    activeCount: 4,
-    presentToday: 4,
-    payroll: 335000
+    totalEmployees: 0,
+    activeCount: 0,
+    presentToday: 0,
+    payroll: 0
   });
 
   // --- HR & WAGE ALLOCATION REPORT STATES ---
@@ -1794,7 +1794,7 @@ export default function EmployeeView({
                 <p className="text-[10px] text-slate-400 font-sans mt-0.5">Corporate Headquarters, Dhaka, Bangladesh</p>
               </div>
               <span className="text-[11px] font-mono text-slate-400 bg-slate-50 border border-slate-150 rounded px-2.5 py-1">
-                Ref: PS-2026-{(Math.floor(1000 + Math.random() * 9000))}
+                Ref: PS-2026-{String(showPaySlipModal.emp?.id || '').slice(-4).toUpperCase().padStart(4, '0')}
               </span>
             </div>
 
