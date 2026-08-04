@@ -467,22 +467,21 @@ export class NavigationEngineService {
   }
 
   // Live counters provider
-  public getLiveBadgeValue(key: LiveBadgeKey, data: { lowStockCount: number; invoicesCount: number }): number | string {
+  public getLiveBadgeValue(key: LiveBadgeKey, data: { lowStockCount: number; invoicesCount: number }): number | string | null {
     switch (key) {
       case 'low_stock':
-        return data.lowStockCount || 3;
+        return data.lowStockCount > 0 ? data.lowStockCount : null;
       case 'new_orders':
-        return data.invoicesCount > 0 ? data.invoicesCount : 5;
+        return data.invoicesCount > 0 ? data.invoicesCount : null;
       case 'pending_approvals':
-        return 4;
       case 'unread_notifications':
-        return 8;
       case 'draft_documents':
-        return 2;
+        // No real backing data source for these yet — show nothing rather than a fabricated number.
+        return null;
       case 'queue_status':
         return 'Idle';
       default:
-        return 0;
+        return null;
     }
   }
 

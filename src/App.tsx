@@ -339,6 +339,8 @@ function AppContent() {
 
   useEffect(() => {
     localStorage.setItem('nexova_products_count', String(products.length));
+    const lowStock = products.filter((p) => p.stock <= p.alertQty).length;
+    localStorage.setItem('nexova_low_stock_count', String(lowStock));
   }, [products]);
 
   useEffect(() => {

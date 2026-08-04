@@ -20,8 +20,8 @@ export default function Sidebar({ currentTab, currentSubTab, onTabChange }: Side
   const [pinned, setPinned] = useState<string[]>([]);
   const [recents, setRecents] = useState<string[]>([]);
 
-  const [lowStockCount, setLowStockCount] = useState(3);
-  const [invoicesCount, setInvoicesCount] = useState(5);
+  const [lowStockCount, setLowStockCount] = useState(0);
+  const [invoicesCount, setInvoicesCount] = useState(0);
 
   const syncWithEngine = () => {
     setGroups(navEngine.getGroups());
@@ -31,12 +31,12 @@ export default function Sidebar({ currentTab, currentSubTab, onTabChange }: Side
     setRecents(navEngine.getRecents());
     setActiveLanguage(navEngine.getLanguage());
 
-    const storedProductsCount = localStorage.getItem('nexova_products_count');
+    const storedLowStockCount = localStorage.getItem('nexova_low_stock_count');
     const storedInvoicesCount = localStorage.getItem('nexova_invoices_count');
-    if (storedProductsCount) {
-      setLowStockCount(Math.max(2, Math.floor(Number(storedProductsCount) / 8)));
+    if (storedLowStockCount !== null) {
+      setLowStockCount(Number(storedLowStockCount));
     }
-    if (storedInvoicesCount) {
+    if (storedInvoicesCount !== null) {
       setInvoicesCount(Number(storedInvoicesCount));
     }
   };
