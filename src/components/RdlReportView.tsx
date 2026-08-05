@@ -585,7 +585,7 @@ export default function RdlReportView({
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
           {/* Designer Palette / Controller */}
-          {activeSubTab !== 'report_manager' && (
+          {activeSubTab === 'report_manager' && (
             <div className="xl:col-span-1 bg-white border border-slate-200 rounded-xl p-5 space-y-5 shadow-xs">
           <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
             <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-2">
@@ -869,7 +869,7 @@ export default function RdlReportView({
         )}
 
         {/* Live physical paper preview RDL layout canvas */}
-        <div className={`${activeSubTab === 'report_manager' ? 'xl:col-span-4' : 'xl:col-span-3'} space-y-4`}>
+        <div className={`${activeSubTab === 'report_manager' ? 'xl:col-span-3' : 'xl:col-span-4'} space-y-4`}>
           {/* Paper actions bar */}
           <div className="bg-slate-900 text-white rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-xs">
