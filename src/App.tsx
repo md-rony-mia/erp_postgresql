@@ -33,7 +33,7 @@ const BankingAndLoanView = lazyWithRetry(() => import('./components/BankingAndLo
 const ReportsView = lazyWithRetry(() => import('./components/ReportsView'));
 
 import AccountingView from './components/AccountingView';
-import { getUnitCostForSale, consumeBatchesForSale, DEFAULT_BATCHES } from './lib/inventoryCosting';
+import { getUnitCostForSale, consumeBatchesForSale } from './lib/inventoryCosting';
 import GridReportView from './components/GridReportView';
 import RdlReportView from './components/RdlReportView';
 import Login from './components/Login';
@@ -890,7 +890,7 @@ function AppContent() {
       console.error('Error reading nexova_batches', e);
     }
     if (!currentBatches || currentBatches.length === 0) {
-      currentBatches = DEFAULT_BATCHES;
+      currentBatches = [];
     }
 
     let updatedBatches = [...currentBatches];
@@ -899,7 +899,10 @@ function AppContent() {
     for (const item of newInvoice.items) {
       const prod = products.find((p) => p.id === item.productId);
       const qtySold = item.quantity || 1;
-      const productObj = prod || { cost: item.price * 0.7 };
+      if (!prod) {
+        console.warn(`COGS calculation: product ${item.productId} not found in current product list; using cost 0 for this line instead of a fabricated estimate. Check for a deleted/mismatched product.`);
+      }
+      const productObj = prod || { cost: 0 };
 
       // Calculate sale unit cost according to valuationMethod
       const unitCost = getUnitCostForSale(

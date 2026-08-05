@@ -190,6 +190,7 @@ export const INITIAL_ITEMS: NavigationItem[] = [
   { id: 'rep_tax', label: 'Tax Reports', groupId: 'reports', icon: 'Percent', tab: 'reports', subTab: 'tax_report', order: 6, enabled: true, translations: { bn: 'ট্যাক্স বিবরণী' } },
   { id: 'rep_overdue', label: 'Overdue Reminders', groupId: 'reports', icon: 'Clock', tab: 'reports', subTab: 'overdue_reminders', order: 7, enabled: true, translations: { bn: 'বকেয়া রিমাইন্ডার তালিকা' } },
   { id: 'rep_vat_mushak', label: 'VAT / Mushak Sales', groupId: 'reports', icon: 'Receipt', tab: 'reports', subTab: 'mushak_vat', order: 8, enabled: true, translations: { bn: 'ভ্যাট / মূসক বিবরণী' } },
+  { id: 'rep_custom_builder', label: 'Custom Report Builder', groupId: 'reports', icon: 'Sliders', tab: 'reports', subTab: 'custom_reports', order: 9, enabled: true, translations: { bn: 'কাস্টম রিপোর্ট বিল্ডার' } },
 
   // === ADMINISTRATION GROUP ===
   { id: 'admin_users', label: 'Users', groupId: 'administration', icon: 'UserCheck', tab: 'settings', subTab: 'users', order: 1, enabled: true, translations: { bn: 'ব্যবহারকারীগণ' } },

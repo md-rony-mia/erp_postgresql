@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Product, Branch, formatBoxQty } from '../types';
 import { isProductVisibleInBranch, getEffectiveStock } from '../lib/branchUtils';
 import { calculateFIFOValuation, calculateLIFOValuation, DEFAULT_BATCHES } from '../lib/inventoryCosting';
+import { DEMO_SEED_ENABLED } from '../lib/dataClient';
 import {
   Search,
   Plus,
@@ -357,7 +358,7 @@ export default function InventoryView({
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
-    return DEFAULT_BATCHES;
+    return DEMO_SEED_ENABLED ? DEFAULT_BATCHES : [];
   });
 
   useEffect(() => {
