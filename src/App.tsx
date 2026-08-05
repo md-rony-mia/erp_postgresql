@@ -950,6 +950,7 @@ function AppContent() {
         accountId: 'b1', // references Cash in Hand
         category: 'Sales Income',
         referenceNo: newInvoice.invoiceNo,
+        cashImpact: false,
       };
 
       const cogsTx: Transaction = {
@@ -961,6 +962,7 @@ function AppContent() {
         accountId: 'b1',
         category: 'Cost of Goods Sold',
         referenceNo: newInvoice.invoiceNo,
+        cashImpact: false,
       };
 
       setTransactions((prev) => [...prev, newTx, ...(totalCOGS > 0 ? [cogsTx] : [])]);
@@ -1016,6 +1018,7 @@ function AppContent() {
         accountId: 'b1',
         category: 'Cost of Goods Sold',
         referenceNo: newInvoice.invoiceNo,
+        cashImpact: false,
       };
 
       setTransactions((prev) => [...prev, newTx, ...(totalCOGS > 0 ? [cogsTx] : [])]);
@@ -1322,6 +1325,10 @@ function AppContent() {
         return ah;
       })
     );
+  };
+
+  const handleAddAccountHead = (account: AccountHead) => {
+    setAccountHeads((prev) => [...prev, account]);
   };
 
   const handleResetData = async () => {

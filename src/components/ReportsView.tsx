@@ -785,10 +785,12 @@ export default function ReportsView({
 
   // 8. Balance Sheet
   const renderBalanceSheet = () => {
-    // Assets
-    const currentCash = bankAccounts.reduce((sum, b) => sum + b.balance, 0);
-    const receivables = customers.reduce((sum, c) => sum + c.outstandingBalance, 0);
-    const inventoryVal = products.reduce((sum, p) => sum + p.stock * p.cost, 0);
+    // Use operational records while historical transactions are being migrated
+    // to complete journal lines. This keeps legacy cash sales visible in the
+    // statements even when their old COA balance was not posted.
+    const currentCash = bankAccounts.reduce((sum, account) => sum + account.balance, 0);
+    const receivables = customers.reduce((sum, customer) => sum + (customer.outstandingBalance || 0), 0);
+    const inventoryVal = products.reduce((sum, product) => sum + product.stock * product.cost, 0);
     const totalAssets = currentCash + receivables + inventoryVal;
 
     // Liabilities & Equity
@@ -884,22 +886,22 @@ export default function ReportsView({
 
   // 9. Profit & Loss
   const renderProfitLoss = () => {
-    const totalSales = invoices.reduce((sum, inv) => sum + inv.total, 0);
-    // Estimated Cost of Goods Sold is calculated by matching invoice items with product cost
-    let estimatedCOGS = 0;
-    invoices.forEach((inv) => {
-      inv.items.forEach((item) => {
-        const prod = products.find((p) => p.id === item.productId);
-        if (prod) {
-          estimatedCOGS += item.quantity * prod.cost;
-        }
-      });
-    });
+    // Invoices are the primary source. Unlinked cash-sale transactions are
+    // included once for historical/direct postings that have no invoice.
+    const invoiceReferences = new Set(invoices.map((invoice) => invoice.invoiceNo));
+    const unlinkedSales = transactions
+      .filter((transaction) => (transaction.type === 'Deposit' || transaction.type === 'Income') && transaction.category === 'Sales Income' && !invoiceReferences.has(transaction.referenceNo || ''))
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const totalSales = invoices.reduce((sum, invoice) => sum + invoice.total, 0) + unlinkedSales;
+    const estimatedCOGS = invoices.reduce((sum, invoice) => sum + invoice.items.reduce((invoiceCost, item) => {
+      const product = products.find((record) => record.id === item.productId);
+      return invoiceCost + (product ? item.quantity * product.cost : 0);
+    }, 0), 0);
 
     const grossProfit = totalSales - estimatedCOGS;
     const operatingExpenses = transactions
-      .filter((t) => t.type === 'Withdrawal' && t.category.toLowerCase().includes('expense'))
-      .reduce((sum, t) => sum + t.amount, 0);
+      .filter((transaction) => transaction.type === 'Expense' && transaction.category !== 'Cost of Goods Sold' && transaction.category !== 'Manufacturing Cost')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
 
     const netProfit = grossProfit - operatingExpenses;
 
@@ -3589,9 +3591,14 @@ export default function ReportsView({
   // A. CASH FLOW STATEMENT (ক্যাশ ফ্লো স্টেটমেন্ট)
   // ========================================================
   const renderCashFlow = () => {
-    // 1. Operating: Cash in from paid Invoices, Cash out from expense transactions
-    const invoiceInflow = invoices.filter(inv => inv.isPaid).reduce((sum, inv) => sum + inv.total, 0);
-    const expenseOutflow = transactions.filter(t => t.type === 'Expense').reduce((sum, t) => sum + t.amount, 0);
+    // Cash flow follows cash-impacting ledger postings. Accrual credit sales
+    // and COGS postings are explicitly excluded from cash movements.
+    const invoiceInflow = transactions
+      .filter((tx) => tx.cashImpact !== false && (tx.type === 'Deposit' || tx.type === 'Income'))
+      .reduce((sum, tx) => sum + tx.amount, 0);
+    const expenseOutflow = transactions
+      .filter((tx) => tx.cashImpact !== false && (tx.type === 'Withdrawal' || tx.type === 'Expense'))
+      .reduce((sum, tx) => sum + tx.amount, 0);
     const customOperating = cashFlowAdjustments.filter(cf => cf.type === 'Operating').reduce((sum, cf) => sum + cf.amount, 0);
     const operatingTotal = invoiceInflow - expenseOutflow + customOperating;
 
