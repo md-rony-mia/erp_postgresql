@@ -1263,7 +1263,8 @@ function AppContent() {
   };
 
   // Debit Note: issued to a supplier for a purchase return — reduces what we owe them (Accounts
-  // Payable) and reverses the corresponding Cost of Goods Sold.
+  // Payable) and reduces Merchandise Inventory (the goods are being sent back before ever being
+  // sold, so this never touched Cost of Goods Sold).
   // Credit Note: issued to a customer for a sales return — reduces what they owe us (Accounts
   // Receivable) and reverses the corresponding Sales Revenue.
   const handleIssueNote = (note: { noteType: 'Debit' | 'Credit'; partyId: string; amount: number; reason: string }) => {
@@ -1277,7 +1278,7 @@ function AppContent() {
       setAccountHeads((prev) =>
         prev.map((ah) => {
           if (ah.code === '2010') return { ...ah, balance: ah.balance - amount }; // Accounts Payable
-          if (ah.code === '5010') return { ...ah, balance: ah.balance - amount }; // Cost of Goods Sold
+          if (ah.code === '1040') return { ...ah, balance: Math.max(0, ah.balance - amount) }; // Merchandise Inventory (goods never sold — reduce stock asset, not COGS)
           return ah;
         })
       );
