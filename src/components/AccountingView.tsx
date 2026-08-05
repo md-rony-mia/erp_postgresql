@@ -24,6 +24,7 @@ interface AccountingViewProps {
   transactions: Transaction[];
   bankAccounts: BankAccount[];
   onLogTransaction: (tx: Omit<Transaction, 'id' | 'date'>) => void;
+  onAddAccountHead: (account: AccountHead) => void;
   activeSubTab?: string;
   settings?: AppSettings;
 }
@@ -33,32 +34,47 @@ export default function AccountingView({
   transactions,
   bankAccounts,
   onLogTransaction,
+  onAddAccountHead,
   activeSubTab = 'chart_accounts',
   settings,
 }: AccountingViewProps) {
   // Map sidebar activeSubTab to internal views
-  const currentTab = ['chart_accounts', 'journal_entries', 'payments', 'income', 'income_categories', 'expenses', 'expense_categories', 'ledger', 'budget'].includes(activeSubTab)
-    ? activeSubTab
-    : 'chart_accounts';
+  const tabAliases: Record<string, string> = {
+    contra_voucher: 'journal_entries',
+    payment_voucher: 'payments',
+    receipt_voucher: 'income',
+    debit_note: 'journal_entries',
+    credit_note: 'journal_entries',
+    ledger: 'journal_entries',
+  };
+  const currentTab = tabAliases[activeSubTab] || (
+    ['chart_accounts', 'journal_entries', 'payments', 'income', 'income_categories', 'expenses', 'expense_categories', 'budget'].includes(activeSubTab)
+      ? activeSubTab
+      : 'chart_accounts'
+  );
 
   // --- LOCAL PERSISTENCE FOR CATEGORIES ---
-  const [incomeCategories, setIncomeCategories] = useState<string[]>([
-    'Sales Income',
-    'Other Revenue',
-    'Interest Credit',
-    'Rental Income',
-    'Service Commission',
-  ]);
+  const readCategories = (storageKey: string, fallback: string[]) => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      const parsed = saved ? JSON.parse(saved) : null;
+      return Array.isArray(parsed) && parsed.every((value) => typeof value === 'string') ? parsed : fallback;
+    } catch {
+      return fallback;
+    }
+  };
 
-  const [expenseCategories, setExpenseCategories] = useState<string[]>([
-    'Office Supplies',
-    'Cost of Goods Sold',
-    'Utilities Expense',
-    'Marketing Expense',
-    'Office Rent',
-    'Wages & Salaries',
-    'Entertainment',
-  ]);
+  const [incomeCategories, setIncomeCategories] = useState<string[]>(() => readCategories('nexova_income_categories', ['Sales Revenue']));
+
+  const [expenseCategories, setExpenseCategories] = useState<string[]>(() => readCategories('nexova_expense_categories', ['Office Rent Expense', 'Salary & Wages Expense', 'Cost of Goods Sold']));
+
+  React.useEffect(() => {
+    localStorage.setItem('nexova_income_categories', JSON.stringify(incomeCategories));
+  }, [incomeCategories]);
+
+  React.useEffect(() => {
+    localStorage.setItem('nexova_expense_categories', JSON.stringify(expenseCategories));
+  }, [expenseCategories]);
 
   // Ledger Audit State & Budget Allocation State
   const [ledgerAuditEntries, setLedgerAuditEntries] = useState<any[]>(() => {
@@ -148,6 +164,10 @@ export default function AccountingView({
 
   // --- EDIT & DELETE HANDLERS ---
   const handleDeleteCategory = (catName: string, type: 'income' | 'expense') => {
+    if (transactions.some((tx) => tx.category === catName)) {
+      alert('This category is already used by posted transactions and cannot be deleted. Create a replacement account and post a reversal/reclassification instead.');
+      return;
+    }
     if (confirm(`Are you sure you want to delete category "${catName}"?`)) {
       if (type === 'income') {
         setIncomeCategories(incomeCategories.filter(c => c !== catName));
@@ -160,6 +180,10 @@ export default function AccountingView({
   const handleEditCategorySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingCatName || !editingCatNewName) return;
+    if (transactions.some((tx) => tx.category === editingCatName)) {
+      alert('Posted transaction categories cannot be renamed. Create a new category for future postings.');
+      return;
+    }
     if (editingCatType === 'income') {
       setIncomeCategories(incomeCategories.map(c => c === editingCatName ? editingCatNewName : c));
     } else {
@@ -184,6 +208,11 @@ export default function AccountingView({
       errors.accountId = 'Please select a bank account/asset (অনুগ্রহ করে ব্যাংক অ্যাকাউন্ট সিলেক্ট করুন)';
     }
 
+    const postingAccount = accountHeads.find((head) => head.name.trim().toLowerCase() === category.trim().toLowerCase());
+    if (!postingAccount || postingAccount.type !== (txType === 'Income' ? 'Revenue' : 'Expense')) {
+      errors.category = `Create a matching ${txType === 'Income' ? 'Revenue' : 'Expense'} account head before posting this category.`;
+    }
+
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
       return;
@@ -198,19 +227,10 @@ export default function AccountingView({
       accountId: accountId,
       category: category,
       referenceNo: `JV-${1000 + transactions.length + 1}`,
+      debitAccountCode: txType === 'Income' ? (accountId === 'b1' ? '1010' : '1020') : postingAccount!.code,
+      creditAccountCode: txType === 'Income' ? postingAccount!.code : (accountId === 'b1' ? '1010' : '1020'),
+      cashImpact: true,
     });
-
-    // Update the local account head balance dynamically for instant visual updates
-    const headToUpdate = localAccountHeads.find(ah => ah.name === category);
-    if (headToUpdate) {
-      setLocalAccountHeads(prev => prev.map(ah => {
-        if (ah.id === headToUpdate.id) {
-          const delta = txType === 'Income' ? parseFloat(amount) : -parseFloat(amount);
-          return { ...ah, balance: ah.balance + delta };
-        }
-        return ah;
-      }));
-    }
 
     setDesc('');
     setAmount('');
@@ -219,7 +239,11 @@ export default function AccountingView({
 
   const handleAccSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accCode || !accName || !accBalance) return;
+    if (!accCode || !accName || accBalance === '') return;
+    if (localAccountHeads.some((head) => head.code.trim() === accCode.trim())) {
+      alert('Account code must be unique.');
+      return;
+    }
 
     const newHead: AccountHead = {
       id: `acc_head_${Date.now()}`,
@@ -229,7 +253,7 @@ export default function AccountingView({
       balance: parseFloat(accBalance),
     };
 
-    setLocalAccountHeads([...localAccountHeads, newHead]);
+    onAddAccountHead(newHead);
     setAccCode('');
     setAccName('');
     setAccBalance('');
@@ -238,12 +262,18 @@ export default function AccountingView({
 
   const handleCatSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCatName) return;
+    const name = newCatName.trim();
+    if (!name) return;
+    const categories = catModalType === 'income' ? incomeCategories : expenseCategories;
+    if (categories.some((cat) => cat.toLowerCase() === name.toLowerCase())) {
+      alert('A category with this name already exists.');
+      return;
+    }
 
     if (catModalType === 'income') {
-      setIncomeCategories([...incomeCategories, newCatName]);
+      setIncomeCategories([...incomeCategories, name]);
     } else {
-      setExpenseCategories([...expenseCategories, newCatName]);
+      setExpenseCategories([...expenseCategories, name]);
     }
 
     setNewCatName('');
@@ -1317,6 +1347,9 @@ export default function AccountingView({
                       incomeCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)
                     )}
                   </select>
+                  {formErrors.category && (
+                    <span className="block text-[9px] text-rose-600 font-bold mt-1 leading-tight">{formErrors.category}</span>
+                  )}
                 </div>
               </div>
 

@@ -950,6 +950,7 @@ function AppContent() {
         accountId: 'b1', // references Cash in Hand
         category: 'Sales Income',
         referenceNo: newInvoice.invoiceNo,
+        cashImpact: false,
       };
 
       const cogsTx: Transaction = {
@@ -961,6 +962,7 @@ function AppContent() {
         accountId: 'b1',
         category: 'Cost of Goods Sold',
         referenceNo: newInvoice.invoiceNo,
+        cashImpact: false,
       };
 
       setTransactions((prev) => [...prev, newTx, ...(totalCOGS > 0 ? [cogsTx] : [])]);
@@ -1016,6 +1018,7 @@ function AppContent() {
         accountId: 'b1',
         category: 'Cost of Goods Sold',
         referenceNo: newInvoice.invoiceNo,
+        cashImpact: false,
       };
 
       setTransactions((prev) => [...prev, newTx, ...(totalCOGS > 0 ? [cogsTx] : [])]);
@@ -1217,17 +1220,24 @@ function AppContent() {
       })
     );
 
-    // Update Chart of accounts balances
+    // Post both sides of the journal entry. Account balances use their normal
+    // balance convention: debit increases assets/expenses; credit increases
+    // liabilities/equity/revenue.
     setAccountHeads((prev) =>
       prev.map((ah) => {
-        if (ah.code === '1010') {
-          // Cash in Hand adjusted
-          const delta = tx.type === 'Deposit' || tx.type === 'Income' ? tx.amount : -tx.amount;
-          return { ...ah, balance: ah.balance + delta };
-        }
-        return ah;
+        const debitDelta = ah.code === tx.debitAccountCode
+          ? (ah.type === 'Asset' || ah.type === 'Expense' ? tx.amount : -tx.amount)
+          : 0;
+        const creditDelta = ah.code === tx.creditAccountCode
+          ? (ah.type === 'Asset' || ah.type === 'Expense' ? -tx.amount : tx.amount)
+          : 0;
+        return debitDelta || creditDelta ? { ...ah, balance: ah.balance + debitDelta + creditDelta } : ah;
       })
     );
+  };
+
+  const handleAddAccountHead = (account: AccountHead) => {
+    setAccountHeads((prev) => [...prev, account]);
   };
 
   const handleResetData = async () => {
@@ -1685,6 +1695,7 @@ function AppContent() {
                   transactions={transactions}
                   bankAccounts={bankAccounts}
                   onLogTransaction={handleLogTransaction}
+                  onAddAccountHead={handleAddAccountHead}
                   activeSubTab={subTabKey}
                   settings={settings}
                 />

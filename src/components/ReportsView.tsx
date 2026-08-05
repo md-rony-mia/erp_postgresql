@@ -740,7 +740,7 @@ export default function ReportsView({
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                 {accountHeads.map((ah) => {
-                  const isDebitSide = ['Assets', 'Expenses'].includes(ah.type);
+                  const isDebitSide = ['Asset', 'Expense'].includes(ah.type);
                   if (isDebitSide) {
                     totalDebit += ah.balance;
                   } else {
@@ -785,18 +785,23 @@ export default function ReportsView({
 
   // 8. Balance Sheet
   const renderBalanceSheet = () => {
-    // Assets
-    const currentCash = bankAccounts.reduce((sum, b) => sum + b.balance, 0);
-    const receivables = customers.reduce((sum, c) => sum + c.outstandingBalance, 0);
-    const inventoryVal = products.reduce((sum, p) => sum + p.stock * p.cost, 0);
-    const totalAssets = currentCash + receivables + inventoryVal;
+    // Statements must be derived from the chart of accounts, never from
+    // invoices, supplier balances, or inventory snapshots mixed together.
+    const byCode = (code: string) => accountHeads.find((head) => head.code === code)?.balance || 0;
+    const currentCash = byCode('1010') + byCode('1020');
+    const receivables = byCode('1030');
+    const inventoryVal = accountHeads
+      .filter((head) => ['1040', '1041', '1042'].includes(head.code))
+      .reduce((sum, head) => sum + head.balance, 0);
+    const totalAssets = accountHeads.filter((head) => head.type === 'Asset').reduce((sum, head) => sum + head.balance, 0);
 
-    // Liabilities & Equity
-    const payables = suppliers.reduce((sum, s) => sum + (s.outstandingBalance || 0), 0);
-    const retainedEarnings = invoices.reduce((sum, inv) => sum + inv.total, 0) - purchaseOrders.reduce((sum, po) => sum + po.total, 0);
-    const equityFromHeads = accountHeads.filter(h => h.type === 'Equity').reduce((sum, h) => sum + h.balance, 0);
-    const ownerEquity = equityFromHeads > 0 ? equityFromHeads : (totalAssets - (payables + retainedEarnings));
+    const payables = accountHeads.filter((head) => head.type === 'Liability').reduce((sum, head) => sum + head.balance, 0);
+    const totalRevenue = accountHeads.filter((head) => head.type === 'Revenue').reduce((sum, head) => sum + head.balance, 0);
+    const totalExpenses = accountHeads.filter((head) => head.type === 'Expense').reduce((sum, head) => sum + head.balance, 0);
+    const retainedEarnings = totalRevenue - totalExpenses;
+    const ownerEquity = accountHeads.filter((head) => head.type === 'Equity').reduce((sum, head) => sum + head.balance, 0);
     const totalLiabilitiesEquity = payables + ownerEquity + retainedEarnings;
+    const balanceDifference = totalAssets - totalLiabilitiesEquity;
 
     return (
       <div className="space-y-6">
@@ -861,8 +866,10 @@ export default function ReportsView({
             <ShieldCheck className="h-5 w-5 text-indigo-200" />
             <span className="text-xs font-bold uppercase tracking-wider">Accounting Ledger Equilibrium Statement</span>
           </div>
-          <span className="text-xs font-mono font-bold bg-white/10 px-3 py-1 rounded">
-            Assets (৳{totalAssets.toLocaleString()}) = Liabilities + Equity (৳{totalLiabilitiesEquity.toLocaleString()})
+          <span className={`text-xs font-mono font-bold px-3 py-1 rounded ${Math.abs(balanceDifference) < 0.01 ? 'bg-white/10' : 'bg-rose-500/30'}`}>
+            {Math.abs(balanceDifference) < 0.01
+              ? `Balanced: Assets (৳${totalAssets.toLocaleString()}) = Liabilities + Equity (৳${totalLiabilitiesEquity.toLocaleString()})`
+              : `Out of balance by ৳${Math.abs(balanceDifference).toLocaleString()}`}
           </span>
         </div>
       </div>
@@ -871,22 +878,15 @@ export default function ReportsView({
 
   // 9. Profit & Loss
   const renderProfitLoss = () => {
-    const totalSales = invoices.reduce((sum, inv) => sum + inv.total, 0);
-    // Estimated Cost of Goods Sold is calculated by matching invoice items with product cost
-    let estimatedCOGS = 0;
-    invoices.forEach((inv) => {
-      inv.items.forEach((item) => {
-        const prod = products.find((p) => p.id === item.productId);
-        if (prod) {
-          estimatedCOGS += item.quantity * prod.cost;
-        }
-      });
-    });
+    const totalSales = accountHeads.filter((head) => head.type === 'Revenue').reduce((sum, head) => sum + head.balance, 0);
+    const estimatedCOGS = accountHeads
+      .filter((head) => head.type === 'Expense' && (head.code === '5010' || head.name.toLowerCase().includes('cost of goods')))
+      .reduce((sum, head) => sum + head.balance, 0);
 
     const grossProfit = totalSales - estimatedCOGS;
-    const operatingExpenses = transactions
-      .filter((t) => t.type === 'Withdrawal' && t.category.toLowerCase().includes('expense'))
-      .reduce((sum, t) => sum + t.amount, 0);
+    const operatingExpenses = accountHeads
+      .filter((head) => head.type === 'Expense' && head.code !== '5010' && !head.name.toLowerCase().includes('cost of goods'))
+      .reduce((sum, head) => sum + head.balance, 0);
 
     const netProfit = grossProfit - operatingExpenses;
 
@@ -3576,9 +3576,14 @@ export default function ReportsView({
   // A. CASH FLOW STATEMENT (ক্যাশ ফ্লো স্টেটমেন্ট)
   // ========================================================
   const renderCashFlow = () => {
-    // 1. Operating: Cash in from paid Invoices, Cash out from expense transactions
-    const invoiceInflow = invoices.filter(inv => inv.isPaid).reduce((sum, inv) => sum + inv.total, 0);
-    const expenseOutflow = transactions.filter(t => t.type === 'Expense').reduce((sum, t) => sum + t.amount, 0);
+    // Cash flow follows cash-impacting ledger postings. Accrual credit sales
+    // and COGS postings are explicitly excluded from cash movements.
+    const invoiceInflow = transactions
+      .filter((tx) => tx.cashImpact !== false && (tx.type === 'Deposit' || tx.type === 'Income'))
+      .reduce((sum, tx) => sum + tx.amount, 0);
+    const expenseOutflow = transactions
+      .filter((tx) => tx.cashImpact !== false && (tx.type === 'Withdrawal' || tx.type === 'Expense'))
+      .reduce((sum, tx) => sum + tx.amount, 0);
     const customOperating = cashFlowAdjustments.filter(cf => cf.type === 'Operating').reduce((sum, cf) => sum + cf.amount, 0);
     const operatingTotal = invoiceInflow - expenseOutflow + customOperating;
 

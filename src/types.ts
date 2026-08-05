@@ -164,6 +164,11 @@ export interface Transaction {
   category: string;
   referenceNo?: string;
   branchId?: string;
+  /** The two ledger legs created by this posting. Legacy records may not have them. */
+  debitAccountCode?: string;
+  creditAccountCode?: string;
+  /** False for accrual/non-cash postings such as credit sales and COGS. */
+  cashImpact?: boolean;
 }
 
 export interface AccountHead {

@@ -139,6 +139,9 @@ export const INITIAL_ITEMS: NavigationItem[] = [
   { id: 'profit_loss', label: 'Profit & Loss', groupId: 'accounting', icon: 'TrendingUp', tab: 'reports', subTab: 'profit_loss', order: 12, enabled: true, translations: { bn: 'লাভ-ক্ষতি হিসাব' } },
   { id: 'balance_sheet', label: 'Balance Sheet', groupId: 'accounting', icon: 'FileCheck', tab: 'reports', subTab: 'balance_sheet', order: 13, enabled: true, translations: { bn: 'উদ্বৃত্ত পত্র' } },
   { id: 'cash_flow', label: 'Cash Flow', groupId: 'accounting', icon: 'Activity', tab: 'reports', subTab: 'cash_flow', order: 14, enabled: true, translations: { bn: 'নগদ প্রবাহ বিবরণী' } },
+  { id: 'income_categories', label: 'Income Categories', groupId: 'accounting', icon: 'Tags', tab: 'accounting', subTab: 'income_categories', order: 15, enabled: true, translations: { bn: 'আয় ক্যাটাগরি' } },
+  { id: 'expense_categories', label: 'Expense Categories', groupId: 'accounting', icon: 'Tags', tab: 'accounting', subTab: 'expense_categories', order: 16, enabled: true, translations: { bn: 'খরচের ক্যাটাগরি' } },
+  { id: 'budget', label: 'Budget', groupId: 'accounting', icon: 'Calculator', tab: 'accounting', subTab: 'budget', order: 17, enabled: true, translations: { bn: 'বাজেট' } },
 
   // === CRM GROUP ===
   { id: 'crm_leads', label: 'Leads', groupId: 'crm', icon: 'UserPlus', tab: 'crm', subTab: 'leads', order: 1, enabled: true, translations: { bn: 'লিডসমূহ' } },
