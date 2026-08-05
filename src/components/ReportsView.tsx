@@ -46,6 +46,7 @@ import {
   ArrowUpDown,
   Plus,
   FileSpreadsheet,
+  GripVertical,
 } from 'lucide-react';
 
 interface ReportsViewProps {
@@ -155,11 +156,85 @@ export default function ReportsView({
   const [newMfgLine, setNewMfgLine] = useState('Extrusion Line 1');
 
   // Custom Report Builder State
-  const [customEntity, setCustomEntity] = useState<'invoices' | 'transactions' | 'employees' | 'products'>('invoices');
+  const [customEntity, setCustomEntity] = useState<'invoices' | 'transactions' | 'employees' | 'products' | 'customers' | 'suppliers' | 'purchaseOrders'>('invoices');
   const [customFields, setCustomFields] = useState<string[]>(['invoiceNo', 'customerName', 'total', 'isPaid']);
   const [customFilterValue, setCustomFilterValue] = useState('');
   const [customSortField, setCustomSortField] = useState('total');
   const [customSortOrder, setCustomSortOrder] = useState<'asc' | 'desc'>('desc');
+  const [customDragIndex, setCustomDragIndex] = useState<number | null>(null);
+
+  // Full field catalog per data source — every real field on the record type,
+  // with a human-readable label. This is what makes "any field/column" possible
+  // instead of a fixed 4-column template per entity.
+  const CUSTOM_REPORT_FIELD_CATALOG: Record<string, { key: string; label: string }[]> = {
+    invoices: [
+      { key: 'invoiceNo', label: 'Invoice No' },
+      { key: 'date', label: 'Date' },
+      { key: 'customerName', label: 'Customer' },
+      { key: 'subtotal', label: 'Subtotal' },
+      { key: 'taxAmount', label: 'Tax Amount' },
+      { key: 'discount', label: 'Discount' },
+      { key: 'total', label: 'Total' },
+      { key: 'paymentMethod', label: 'Payment Method' },
+      { key: 'isPaid', label: 'Paid Status' },
+      { key: 'labourCost', label: 'Labour Cost' },
+      { key: 'transportCost', label: 'Transport Cost' },
+    ],
+    transactions: [
+      { key: 'date', label: 'Date' },
+      { key: 'description', label: 'Description' },
+      { key: 'type', label: 'Type' },
+      { key: 'amount', label: 'Amount' },
+      { key: 'category', label: 'Category' },
+      { key: 'referenceNo', label: 'Reference No' },
+      { key: 'accountId', label: 'Account' },
+    ],
+    employees: [
+      { key: 'name', label: 'Name' },
+      { key: 'designation', label: 'Designation' },
+      { key: 'department', label: 'Department' },
+      { key: 'email', label: 'Email' },
+      { key: 'phone', label: 'Phone' },
+      { key: 'joiningDate', label: 'Joining Date' },
+      { key: 'salary', label: 'Salary' },
+      { key: 'status', label: 'Status' },
+    ],
+    products: [
+      { key: 'name', label: 'Product Name' },
+      { key: 'sku', label: 'SKU' },
+      { key: 'category', label: 'Category' },
+      { key: 'brand', label: 'Brand' },
+      { key: 'unit', label: 'Unit' },
+      { key: 'warehouse', label: 'Warehouse' },
+      { key: 'price', label: 'Price' },
+      { key: 'cost', label: 'Cost' },
+      { key: 'stock', label: 'Stock' },
+      { key: 'alertQty', label: 'Alert Qty' },
+      { key: 'abcClass', label: 'ABC Class' },
+    ],
+    customers: [
+      { key: 'name', label: 'Name' },
+      { key: 'phone', label: 'Phone' },
+      { key: 'email', label: 'Email' },
+      { key: 'group', label: 'Group' },
+      { key: 'outstandingBalance', label: 'Outstanding Balance' },
+    ],
+    suppliers: [
+      { key: 'name', label: 'Name' },
+      { key: 'companyName', label: 'Company' },
+      { key: 'phone', label: 'Phone' },
+      { key: 'email', label: 'Email' },
+      { key: 'group', label: 'Group' },
+    ],
+    purchaseOrders: [
+      { key: 'poNo', label: 'PO No' },
+      { key: 'supplierName', label: 'Supplier' },
+      { key: 'date', label: 'Date' },
+      { key: 'subtotal', label: 'Subtotal' },
+      { key: 'total', label: 'Total' },
+      { key: 'status', label: 'Status' },
+    ],
+  };
 
   // Multi-Variance Analytics
   const [analyticsDept, setAnalyticsDept] = useState('All');
@@ -3958,6 +4033,13 @@ export default function ReportsView({
     else if (customEntity === 'transactions') sourceList = transactions;
     else if (customEntity === 'employees') sourceList = employees;
     else if (customEntity === 'products') sourceList = products;
+    else if (customEntity === 'customers') sourceList = customers;
+    else if (customEntity === 'suppliers') sourceList = suppliers;
+    else if (customEntity === 'purchaseOrders') sourceList = purchaseOrders;
+
+    const catalog = CUSTOM_REPORT_FIELD_CATALOG[customEntity] || [];
+    const labelFor = (key: string) => catalog.find(f => f.key === key)?.label || key.replace(/([A-Z])/g, ' $1');
+    const availableFields = catalog.filter(f => !customFields.includes(f.key));
 
     // Filter by text
     const filtered = sourceList.filter(item => {
@@ -3979,16 +4061,50 @@ export default function ReportsView({
         : String(valB).localeCompare(String(valA));
     });
 
+    const addField = (key: string) => {
+      setCustomFields(prev => [...prev, key]);
+    };
+    const removeField = (key: string) => {
+      const next = customFields.filter(f => f !== key);
+      setCustomFields(next);
+      if (customSortField === key && next.length > 0) setCustomSortField(next[0]);
+    };
+    const reorderFields = (fromIdx: number, toIdx: number) => {
+      if (fromIdx === toIdx) return;
+      const next = [...customFields];
+      const [moved] = next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, moved);
+      setCustomFields(next);
+    };
+    const exportCsv = () => {
+      const header = customFields.map(labelFor).join(',');
+      const rows = sorted.map(item =>
+        customFields.map(fld => {
+          const v = item[fld];
+          const s = v === undefined || v === null ? '' : String(v);
+          return `"${s.replace(/"/g, '""')}"`;
+        }).join(',')
+      );
+      const csv = [header, ...rows].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${customEntity}_custom_report.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    };
+
     return (
       <div className="space-y-6">
         <div>
           <h3 className="text-base font-extrabold text-slate-800">Dynamic Custom Reports Builder</h3>
-          <p className="text-xs text-slate-400">Design your own layout. Filter, sort, and display customizable tabular reports instantly.</p>
+          <p className="text-xs text-slate-400">যেকোনো ডেটা সোর্স বেছে নিন, ইচ্ছেমতো কলাম টেনে যোগ করুন, ড্র্যাগ করে সাজান — তারপর ফিল্টার, সর্ট, প্রিন্ট বা এক্সপোর্ট করুন।</p>
         </div>
 
         {/* Configuration Panel */}
         <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-4 text-xs text-left">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">১. প্রাইমারি ডেটা উৎস (Data Entity)</label>
               <select
@@ -3996,26 +4112,19 @@ export default function ReportsView({
                 onChange={(e) => {
                   const ent = e.target.value as any;
                   setCustomEntity(ent);
-                  if (ent === 'invoices') {
-                    setCustomFields(['invoiceNo', 'customerName', 'total', 'isPaid']);
-                    setCustomSortField('total');
-                  } else if (ent === 'transactions') {
-                    setCustomFields(['referenceNo', 'description', 'amount', 'type']);
-                    setCustomSortField('amount');
-                  } else if (ent === 'employees') {
-                    setCustomFields(['name', 'designation', 'salary', 'status']);
-                    setCustomSortField('salary');
-                  } else if (ent === 'products') {
-                    setCustomFields(['name', 'sku', 'price', 'stock']);
-                    setCustomSortField('stock');
-                  }
+                  const defaults = (CUSTOM_REPORT_FIELD_CATALOG[ent] || []).slice(0, 4).map(f => f.key);
+                  setCustomFields(defaults);
+                  setCustomSortField(defaults[0] || '');
                 }}
                 className="w-full bg-white border border-slate-250 p-2 rounded-lg font-bold cursor-pointer text-slate-800"
               >
-                <option value="invoices">Customer Invoices (বিক্রয় চালান)</option>
+                <option value="invoices">Customer Invoices (বিক্রয় চালান)</option>
                 <option value="transactions">GL Ledger Postings (সাধারণ লেজার)</option>
                 <option value="employees">HR Employee Roster (কর্মকর্তা তালিকা)</option>
                 <option value="products">Inventory Raw/Fin Products (পণ্য স্টক)</option>
+                <option value="customers">Customers (গ্রাহক তালিকা)</option>
+                <option value="suppliers">Suppliers (সরবরাহকারী তালিকা)</option>
+                <option value="purchaseOrders">Purchase Orders (ক্রয়াদেশ)</option>
               </select>
             </div>
 
@@ -4027,7 +4136,7 @@ export default function ReportsView({
                 className="w-full bg-white border border-slate-250 p-2 rounded-lg font-mono font-bold cursor-pointer"
               >
                 {customFields.map(fld => (
-                  <option key={fld} value={fld}>{fld}</option>
+                  <option key={fld} value={fld}>{labelFor(fld)}</option>
                 ))}
               </select>
             </div>
@@ -4053,19 +4162,75 @@ export default function ReportsView({
                 </button>
               </div>
             </div>
+          </div>
 
-            <div>
-              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">৪. টেক্সট ফিল্টার (Live Query Search)</label>
-              <div className="relative">
-                <input
-                  type="text"
-                  placeholder="Type to filter rows..."
-                  value={customFilterValue}
-                  onChange={(e) => setCustomFilterValue(e.target.value)}
-                  className="w-full bg-white border border-slate-250 p-2 pl-8 rounded-lg font-bold text-slate-800"
-                />
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
-              </div>
+          {/* Column Picker — Available fields (click to add) */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">৪. উপলব্ধ ফিল্ড — কলাম যোগ করতে ক্লিক করুন (Available Fields)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {availableFields.length === 0 && (
+                <span className="text-slate-400 italic">সব ফিল্ড ইতিমধ্যে যোগ করা হয়েছে।</span>
+              )}
+              {availableFields.map(f => (
+                <button
+                  key={f.key}
+                  onClick={() => addField(f.key)}
+                  className="flex items-center gap-1 bg-white border border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 font-bold px-2.5 py-1.5 rounded-lg cursor-pointer transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  {f.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Selected Columns — drag and drop to reorder, click X to remove */}
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">৫. নির্বাচিত কলাম — ড্র্যাগ করে ক্রম বদলান (Selected Columns)</label>
+            <div className="flex flex-wrap gap-1.5">
+              {customFields.length === 0 && (
+                <span className="text-slate-400 italic">উপরে থেকে অন্তত একটা ফিল্ড যোগ করুন।</span>
+              )}
+              {customFields.map((fld, idx) => (
+                <div
+                  key={fld}
+                  draggable
+                  onDragStart={() => setCustomDragIndex(idx)}
+                  onDragOver={(e) => e.preventDefault()}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    if (customDragIndex !== null) reorderFields(customDragIndex, idx);
+                    setCustomDragIndex(null);
+                  }}
+                  onDragEnd={() => setCustomDragIndex(null)}
+                  className={`flex items-center gap-1.5 bg-indigo-600 text-white font-bold px-2.5 py-1.5 rounded-lg cursor-grab active:cursor-grabbing select-none transition-opacity ${
+                    customDragIndex === idx ? 'opacity-40' : 'opacity-100'
+                  }`}
+                >
+                  <GripVertical className="h-3.5 w-3.5 opacity-70" />
+                  {labelFor(fld)}
+                  <button
+                    onClick={() => removeField(fld)}
+                    className="ml-0.5 hover:bg-indigo-800 rounded-full p-0.5 cursor-pointer"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">৬. টেক্সট ফিল্টার (Live Query Search)</label>
+            <div className="relative max-w-sm">
+              <input
+                type="text"
+                placeholder="Type to filter rows..."
+                value={customFilterValue}
+                onChange={(e) => setCustomFilterValue(e.target.value)}
+                className="w-full bg-white border border-slate-250 p-2 pl-8 rounded-lg font-bold text-slate-800"
+              />
+              <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
             </div>
           </div>
 
@@ -4073,13 +4238,22 @@ export default function ReportsView({
             <span>
               জেনারেট হচ্ছে: <strong className="text-slate-800 uppercase font-mono">{customEntity}</strong> ডাটা সোর্স। মোট রেজাল্টস: <strong>{sorted.length} সারি</strong>
             </span>
-            <button
-              onClick={() => window.print()}
-              className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-bold"
-            >
-              <Printer className="h-3.5 w-3.5" />
-              <span>মুদ্রণ ও পিডিএফ তৈরি করুন (Print / PDF)</span>
-            </button>
+            <div className="flex items-center gap-4">
+              <button
+                onClick={exportCsv}
+                className="flex items-center gap-1 text-emerald-600 hover:text-emerald-800 font-bold cursor-pointer"
+              >
+                <FileSpreadsheet className="h-3.5 w-3.5" />
+                <span>CSV এক্সপোর্ট</span>
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+              >
+                <Printer className="h-3.5 w-3.5" />
+                <span>মুদ্রণ ও পিডিএফ তৈরি করুন (Print / PDF)</span>
+              </button>
+            </div>
           </div>
         </div>
 
@@ -4089,14 +4263,18 @@ export default function ReportsView({
             <thead>
               <tr className="bg-slate-150 text-slate-600 border-b border-slate-250 text-[10px] font-bold uppercase tracking-wider">
                 {customFields.map(fld => (
-                  <th key={fld} className="py-2.5 px-4">{fld.replace(/([A-Z])/g, ' $1')}</th>
+                  <th key={fld} className="py-2.5 px-4">{labelFor(fld)}</th>
                 ))}
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
-              {sorted.length === 0 ? (
+              {customFields.length === 0 ? (
                 <tr>
-                  <td colSpan={customFields.length} className="py-8 text-center text-slate-400 font-bold">ফিল্টার ক্রাইটেরিয়ার সাথে মিলে এমন কোনো ডেটা পাওয়া যায়নি।</td>
+                  <td className="py-8 text-center text-slate-400 font-bold">উপরে থেকে কলাম নির্বাচন করুন রিপোর্ট দেখতে।</td>
+                </tr>
+              ) : sorted.length === 0 ? (
+                <tr>
+                  <td colSpan={customFields.length} className="py-8 text-center text-slate-400 font-bold">ফিল্টার ক্রাইটেরিয়ার সাথে মিলে এমন কোনো ডেটা পাওয়া যায়নি।</td>
                 </tr>
               ) : (
                 sorted.map((item, idx) => (
@@ -4108,7 +4286,7 @@ export default function ReportsView({
                       // formatting improvements
                       if (fld === 'isPaid') displayVal = val ? 'PAID' : 'DUE';
                       if (typeof val === 'number') {
-                        if (['price', 'salary', 'total', 'amount'].includes(fld)) {
+                        if (['price', 'salary', 'total', 'amount', 'cost', 'subtotal', 'taxAmount', 'discount', 'outstandingBalance', 'labourCost', 'transportCost'].includes(fld)) {
                           displayVal = '৳' + val.toLocaleString();
                         } else {
                           displayVal = val.toLocaleString();
@@ -4117,7 +4295,7 @@ export default function ReportsView({
 
                       return (
                         <td key={fld} className={`py-3 px-4 ${
-                          ['invoiceNo', 'referenceNo', 'id'].includes(fld) ? 'font-mono text-indigo-600 font-bold' : ''
+                          ['invoiceNo', 'referenceNo', 'id', 'poNo', 'sku'].includes(fld) ? 'font-mono text-indigo-600 font-bold' : ''
                         } ${
                           displayVal === 'PAID' ? 'text-emerald-600 font-bold' : displayVal === 'DUE' ? 'text-rose-500 font-bold' : ''
                         }`}>
