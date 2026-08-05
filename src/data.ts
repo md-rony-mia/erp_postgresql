@@ -370,6 +370,32 @@ export const INITIAL_ACCOUNT_HEADS: AccountHead[] = [
   { id: 'ah9', name: 'Salary & Wages Expense', code: '5030', type: 'Expense', balance: 112000 },
 ];
 
+// Real, required Chart of Accounts structure with zero balances — this is NOT
+// demo/fake data. handleAddInvoice and other posting logic in App.tsx hard-code
+// these specific account codes (1010, 1020, 1030, 1040, 2010, 3010, 4010, 5010).
+// Without these accounts existing, double-entry postings silently have nothing
+// to update, which desyncs the Balance Sheet from real invoices/purchases.
+// This is seeded regardless of VITE_ENABLE_DEMO_SEED, same as the minimal
+// bootstrap branch in BranchManagementView.tsx.
+export const MINIMAL_BOOTSTRAP_ACCOUNT_HEADS: AccountHead[] = INITIAL_ACCOUNT_HEADS.map((h) => ({
+  ...h,
+  balance: 0,
+}));
+
+// Same reasoning as above — 'b1' is referenced directly as a fallback bank
+// account id throughout App.tsx's posting logic.
+export const MINIMAL_BOOTSTRAP_BANK_ACCOUNTS: BankAccount[] = [
+  {
+    id: 'b1',
+    accountName: 'Main Cash Account',
+    accountNumber: '',
+    bankName: 'Cash in Hand',
+    balance: 0,
+    type: 'Current',
+  },
+];
+
+
 export const INITIAL_EMPLOYEES: Employee[] = [
   {
     id: 'e1',
