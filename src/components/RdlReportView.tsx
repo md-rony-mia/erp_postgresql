@@ -25,6 +25,7 @@ import {
   Layers,
   Edit2,
   Code,
+  GripVertical,
   FileCheck,
   Check,
   X,
@@ -231,6 +232,8 @@ export default function RdlReportView({
 
   // Visual Setup Panel States
   const [selectedElementId, setSelectedElementId] = useState<string | null>(null);
+  const [draggedElementId, setDraggedElementId] = useState<string | null>(null);
+  const [dragOverElementId, setDragOverElementId] = useState<string | null>(null);
   const [showExprBuilder, setShowExprBuilder] = useState(false);
   const [exprText, setExprText] = useState('');
 
@@ -395,6 +398,21 @@ export default function RdlReportView({
       }
       return t;
     });
+    setTemplates(updatedTemplates);
+  };
+
+  // Reposition an element by dragging it before/onto another element in the page flow.
+  const handleReorderElement = (draggedId: string, targetId: string) => {
+    if (draggedId === targetId) return;
+    const elements = [...selectedTemplate.elements];
+    const fromIndex = elements.findIndex((el) => el.id === draggedId);
+    const toIndex = elements.findIndex((el) => el.id === targetId);
+    if (fromIndex === -1 || toIndex === -1) return;
+    const [moved] = elements.splice(fromIndex, 1);
+    elements.splice(toIndex, 0, moved);
+    const updatedTemplates = templates.map((t) =>
+      t.id === activeTemplateId ? { ...t, elements } : t
+    );
     setTemplates(updatedTemplates);
   };
 
@@ -585,7 +603,7 @@ export default function RdlReportView({
       ) : (
         <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 items-start">
           {/* Designer Palette / Controller */}
-          {activeSubTab !== 'report_manager' && (
+          {activeSubTab === 'report_manager' && (
             <div className="xl:col-span-1 bg-white border border-slate-200 rounded-xl p-5 space-y-5 shadow-xs">
           <div className="border-b border-slate-100 pb-3 flex items-center justify-between">
             <h3 className="text-xs font-black text-slate-700 uppercase tracking-wider flex items-center gap-2">
@@ -869,7 +887,7 @@ export default function RdlReportView({
         )}
 
         {/* Live physical paper preview RDL layout canvas */}
-        <div className={`${activeSubTab === 'report_manager' ? 'xl:col-span-4' : 'xl:col-span-3'} space-y-4`}>
+        <div className={`${activeSubTab === 'report_manager' ? 'xl:col-span-3' : 'xl:col-span-4'} space-y-4`}>
           {/* Paper actions bar */}
           <div className="bg-slate-900 text-white rounded-xl p-4 flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2 text-xs">
@@ -906,16 +924,38 @@ export default function RdlReportView({
               <div className="space-y-5">
                 {selectedTemplate.elements.map((el) => {
                   const isSelected = selectedElementId === el.id;
+                  const isDragging = draggedElementId === el.id;
+                  const isDropTarget = dragOverElementId === el.id && draggedElementId !== el.id;
 
                   return (
                     <div
                       key={el.id}
+                      draggable={true}
                       onClick={() => setSelectedElementId(el.id)}
-                      className={`relative cursor-pointer transition-all ${
+                      onDragStart={(e) => {
+                        setDraggedElementId(el.id);
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDragEnd={() => {
+                        setDraggedElementId(null);
+                        setDragOverElementId(null);
+                      }}
+                      onDragOver={(e) => {
+                        e.preventDefault();
+                        if (draggedElementId && draggedElementId !== el.id) setDragOverElementId(el.id);
+                      }}
+                      onDragLeave={() => setDragOverElementId((prev) => (prev === el.id ? null : prev))}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (draggedElementId) handleReorderElement(draggedElementId, el.id);
+                        setDraggedElementId(null);
+                        setDragOverElementId(null);
+                      }}
+                      className={`relative transition-all cursor-grab active:cursor-grabbing ${
                         isSelected
                           ? 'ring-2 ring-indigo-500 ring-offset-2'
                           : 'hover:outline-dashed hover:outline-1 hover:outline-indigo-300'
-                      }`}
+                      } ${isDragging ? 'opacity-30' : ''} ${isDropTarget ? 'border-t-2 border-indigo-500' : ''}`}
                     >
                       {/* Interactive edit handles */}
                       {isSelected && (
@@ -923,6 +963,12 @@ export default function RdlReportView({
                           {el.type}
                         </span>
                       )}
+                      <span
+                        className="absolute -top-4 right-0 text-slate-400 hover:text-indigo-500 z-30 cursor-grab active:cursor-grabbing"
+                        title="Drag to reposition"
+                      >
+                        <GripVertical className="h-3.5 w-3.5" />
+                      </span>
 
                       {/* TextBox Render */}
                       {el.type === 'textbox' && (
