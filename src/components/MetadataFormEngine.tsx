@@ -735,11 +735,22 @@ export default function MetadataFormEngine({
                 <button
                   type="button"
                   onClick={() => {
-                    // Detected coordinate sets
-                    setFormData({
-                      ...formData,
-                      [field.key]: { lat: 23.8103 + (Math.random() - 0.5) * 0.1, lng: 90.4125 + (Math.random() - 0.5) * 0.1 }
-                    });
+                    if (!navigator.geolocation) {
+                      window.alert('Geolocation is not supported by this browser.');
+                      return;
+                    }
+                    navigator.geolocation.getCurrentPosition(
+                      (pos) => {
+                        setFormData({
+                          ...formData,
+                          [field.key]: { lat: pos.coords.latitude, lng: pos.coords.longitude }
+                        });
+                      },
+                      (err) => {
+                        window.alert(`Could not get location: ${err.message}`);
+                      },
+                      { enableHighAccuracy: true, timeout: 10000 }
+                    );
                   }}
                   className="bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-700 font-bold text-[10px] px-2.5 py-1.5 rounded shadow-xs cursor-pointer transition-colors"
                 >
