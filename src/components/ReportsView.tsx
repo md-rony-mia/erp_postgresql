@@ -740,7 +740,7 @@ export default function ReportsView({
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
                 {accountHeads.map((ah) => {
-                  const isDebitSide = ['Assets', 'Expenses'].includes(ah.type);
+                  const isDebitSide = ['Asset', 'Expense'].includes(ah.type);
                   if (isDebitSide) {
                     totalDebit += ah.balance;
                   } else {
@@ -794,9 +794,13 @@ export default function ReportsView({
     // Liabilities & Equity
     const payables = suppliers.reduce((sum, s) => sum + (s.outstandingBalance || 0), 0);
     const retainedEarnings = invoices.reduce((sum, inv) => sum + inv.total, 0) - purchaseOrders.reduce((sum, po) => sum + po.total, 0);
-    const equityFromHeads = accountHeads.filter(h => h.type === 'Equity').reduce((sum, h) => sum + h.balance, 0);
-    const ownerEquity = equityFromHeads > 0 ? equityFromHeads : (totalAssets - (payables + retainedEarnings));
+    // Real capital figure from the Chart of Accounts — never fabricated to force a match.
+    const ownerEquity = accountHeads.filter(h => h.type === 'Equity').reduce((sum, h) => sum + h.balance, 0);
     const totalLiabilitiesEquity = payables + ownerEquity + retainedEarnings;
+    // Any gap here is a real data-sync problem (e.g. a sale wasn't reflected in bank/receivables/stock)
+    // and should be surfaced, not hidden.
+    const reconciliationGap = totalAssets - totalLiabilitiesEquity;
+    const isBalanced = Math.abs(reconciliationGap) < 1;
 
     return (
       <div className="space-y-6">
@@ -856,15 +860,24 @@ export default function ReportsView({
           </div>
         </div>
 
-        <div className="p-4 bg-indigo-600 text-white rounded-xl flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div className={`p-4 ${isBalanced ? 'bg-indigo-600' : 'bg-rose-600'} text-white rounded-xl flex flex-col sm:flex-row justify-between items-center gap-3`}>
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-indigo-200" />
-            <span className="text-xs font-bold uppercase tracking-wider">Accounting Ledger Equilibrium Statement</span>
+            <ShieldCheck className="h-5 w-5 text-white/80" />
+            <span className="text-xs font-bold uppercase tracking-wider">
+              {isBalanced ? 'Accounting Ledger Equilibrium Statement' : 'Ledger Out of Balance — Data Sync Issue Detected'}
+            </span>
           </div>
           <span className="text-xs font-mono font-bold bg-white/10 px-3 py-1 rounded">
-            Assets (৳{totalAssets.toLocaleString()}) = Liabilities + Equity (৳{totalLiabilitiesEquity.toLocaleString()})
+            {isBalanced
+              ? `Assets (৳${totalAssets.toLocaleString()}) = Liabilities + Equity (৳${totalLiabilitiesEquity.toLocaleString()})`
+              : `Assets (৳${totalAssets.toLocaleString()}) ≠ Liabilities + Equity (৳${totalLiabilitiesEquity.toLocaleString()}) — Gap: ৳${reconciliationGap.toLocaleString()}`}
           </span>
         </div>
+        {!isBalanced && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 leading-relaxed">
+            এই gap মানে কোনো sale/purchase আসলে হয়েছে (invoices/purchase orders-এ ধরা পড়েছে) কিন্তু তার সাথে সংশ্লিষ্ট cash, receivable, বা stock ঠিকভাবে আপডেট হয়নি। Bank Accounts, Customers, ও Products-এর ডাটা যাচাই করুন।
+          </div>
+        )}
       </div>
     );
   };

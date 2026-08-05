@@ -1198,6 +1198,94 @@ function AppContent() {
     setLoanAccounts((prev) => [...prev, l]);
   };
 
+  const handleAddAccountHead = (newHead: Omit<AccountHead, 'id'>) => {
+    const h: AccountHead = {
+      ...newHead,
+      id: `acc_head_dynamic_${Date.now()}`,
+    };
+    setAccountHeads((prev) => [...prev, h]);
+  };
+
+  // Contra Voucher: pure reclassification of funds between the business's own bank/cash accounts.
+  // No income, expense, or equity account is touched — only the two BankAccount balances move.
+  const handleContraTransfer = (fromAccountId: string, toAccountId: string, amount: number, narration: string) => {
+    if (fromAccountId === toAccountId || amount <= 0) return;
+    setBankAccounts((prev) =>
+      prev.map((b) => {
+        if (b.id === fromAccountId) return { ...b, balance: b.balance - amount };
+        if (b.id === toAccountId) return { ...b, balance: b.balance + amount };
+        return b;
+      })
+    );
+    const newTx: Transaction = {
+      id: `tx_dynamic_${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      description: narration || 'Inter-account fund transfer',
+      type: 'Transfer',
+      amount,
+      accountId: fromAccountId,
+      toAccountId,
+      category: 'Contra Voucher',
+      referenceNo: `CV-${1000 + transactions.length + 1}`,
+    };
+    setTransactions((prev) => [...prev, newTx]);
+  };
+
+  // Debit Note: issued to a supplier for a purchase return — reduces what we owe them (Accounts
+  // Payable) and reverses the corresponding Cost of Goods Sold.
+  // Credit Note: issued to a customer for a sales return — reduces what they owe us (Accounts
+  // Receivable) and reverses the corresponding Sales Revenue.
+  const handleIssueNote = (note: { noteType: 'Debit' | 'Credit'; partyId: string; amount: number; reason: string }) => {
+    const { noteType, partyId, amount, reason } = note;
+    if (amount <= 0) return;
+
+    if (noteType === 'Debit') {
+      setSuppliers((prev) =>
+        prev.map((s) => (s.id === partyId ? { ...s, outstandingBalance: (s.outstandingBalance || 0) - amount } : s))
+      );
+      setAccountHeads((prev) =>
+        prev.map((ah) => {
+          if (ah.code === '2010') return { ...ah, balance: ah.balance - amount }; // Accounts Payable
+          if (ah.code === '5010') return { ...ah, balance: ah.balance - amount }; // Cost of Goods Sold
+          return ah;
+        })
+      );
+    } else {
+      setCustomers((prev) =>
+        prev.map((c) => (c.id === partyId ? { ...c, outstandingBalance: (c.outstandingBalance || 0) - amount } : c))
+      );
+      setAccountHeads((prev) =>
+        prev.map((ah) => {
+          if (ah.code === '1030') return { ...ah, balance: ah.balance - amount }; // Accounts Receivable
+          if (ah.code === '4010') return { ...ah, balance: ah.balance - amount }; // Sales Revenue
+          return ah;
+        })
+      );
+    }
+
+    const newTx: Transaction = {
+      id: `tx_dynamic_${Date.now()}`,
+      date: new Date().toISOString().split('T')[0],
+      description: reason || `${noteType} Note adjustment`,
+      type: 'Adjustment',
+      amount,
+      accountId: 'adjustment',
+      partyId,
+      category: noteType === 'Debit' ? 'Debit Note' : 'Credit Note',
+      referenceNo: `${noteType === 'Debit' ? 'DN' : 'CN'}-${1000 + transactions.length + 1}`,
+    };
+    setTransactions((prev) => [...prev, newTx]);
+  };
+
+  // Maps a Journal/Payment/Income category label to its Chart-of-Accounts code,
+  // so logging a transaction moves the correct income/expense head, not just cash.
+  const CATEGORY_TO_ACCOUNT_CODE: Record<string, string> = {
+    'Sales Income': '4010',
+    'Cost of Goods Sold': '5010',
+    'Office Rent': '5020',
+    'Wages & Salaries': '5030',
+  };
+
   const handleLogTransaction = (tx: Omit<Transaction, 'id' | 'date'>) => {
     const newTx: Transaction = {
       ...tx,
@@ -1206,7 +1294,7 @@ function AppContent() {
     };
     setTransactions((prev) => [...prev, newTx]);
 
-    // Deduct or deposit from bank account
+    // Deduct or deposit from the actual bank/cash account used
     setBankAccounts((prev) =>
       prev.map((b) => {
         if (b.id === tx.accountId) {
@@ -1217,13 +1305,19 @@ function AppContent() {
       })
     );
 
-    // Update Chart of accounts balances
+    // Update Chart of Accounts — both legs of the entry.
+    const isCashLeg = !bankAccounts.some((b) => b.id === tx.accountId) || tx.accountId === 'cash_on_hand';
+    const matchedCode = tx.category ? CATEGORY_TO_ACCOUNT_CODE[tx.category] : undefined;
     setAccountHeads((prev) =>
       prev.map((ah) => {
-        if (ah.code === '1010') {
-          // Cash in Hand adjusted
-          const delta = tx.type === 'Deposit' || tx.type === 'Income' ? tx.amount : -tx.amount;
+        const delta = tx.type === 'Deposit' || tx.type === 'Income' ? tx.amount : -tx.amount;
+        if (isCashLeg && ah.code === '1010') {
+          // Cash-in-Hand leg (only when the transaction was actually posted against cash, not a bank account)
           return { ...ah, balance: ah.balance + delta };
+        }
+        if (matchedCode && ah.code === matchedCode) {
+          // Income/expense category leg moves opposite to the cash leg
+          return { ...ah, balance: ah.balance - delta };
         }
         return ah;
       })
@@ -1684,7 +1778,12 @@ function AppContent() {
                   accountHeads={accountHeads}
                   transactions={transactions}
                   bankAccounts={bankAccounts}
+                  customers={customers}
+                  suppliers={suppliers}
                   onLogTransaction={handleLogTransaction}
+                  onAddAccountHead={handleAddAccountHead}
+                  onContraTransfer={handleContraTransfer}
+                  onIssueNote={handleIssueNote}
                   activeSubTab={subTabKey}
                   settings={settings}
                 />

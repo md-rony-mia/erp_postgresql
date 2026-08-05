@@ -158,9 +158,11 @@ export interface Transaction {
   id: string;
   date: string;
   description: string;
-  type: 'Deposit' | 'Withdrawal' | 'Transfer' | 'Income' | 'Expense';
+  type: 'Deposit' | 'Withdrawal' | 'Transfer' | 'Income' | 'Expense' | 'Adjustment';
   amount: number;
   accountId: string; // references BankAccount
+  toAccountId?: string; // destination BankAccount, used for Transfer (Contra Voucher) entries
+  partyId?: string; // Customer/Supplier id, used for Debit/Credit Note entries
   category: string;
   referenceNo?: string;
   branchId?: string;
