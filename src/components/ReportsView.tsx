@@ -793,23 +793,16 @@ export default function ReportsView({
     const inventoryVal = products.reduce((sum, product) => sum + product.stock * product.cost, 0);
     const totalAssets = currentCash + receivables + inventoryVal;
 
-    const payables = suppliers.reduce((sum, supplier) => sum + (supplier.outstandingBalance || 0), 0);
-    const invoiceReferences = new Set(invoices.map((invoice) => invoice.invoiceNo));
-    const unlinkedSales = transactions
-      .filter((transaction) => (transaction.type === 'Deposit' || transaction.type === 'Income') && transaction.category === 'Sales Income' && !invoiceReferences.has(transaction.referenceNo || ''))
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-    const totalRevenue = invoices.reduce((sum, invoice) => sum + invoice.total, 0) + unlinkedSales;
-    const totalCOGS = invoices.reduce((sum, invoice) => sum + invoice.items.reduce((invoiceCost, item) => {
-      const product = products.find((record) => record.id === item.productId);
-      return invoiceCost + (product ? item.quantity * product.cost : 0);
-    }, 0), 0);
-    const operatingExpenses = transactions
-      .filter((transaction) => transaction.type === 'Expense' && transaction.category !== 'Cost of Goods Sold' && transaction.category !== 'Manufacturing Cost')
-      .reduce((sum, transaction) => sum + transaction.amount, 0);
-    const retainedEarnings = totalRevenue - totalCOGS - operatingExpenses;
-    const ownerEquity = accountHeads.filter((head) => head.type === 'Equity').reduce((sum, head) => sum + head.balance, 0);
+    // Liabilities & Equity
+    const payables = suppliers.reduce((sum, s) => sum + (s.outstandingBalance || 0), 0);
+    const retainedEarnings = invoices.reduce((sum, inv) => sum + inv.total, 0) - purchaseOrders.reduce((sum, po) => sum + po.total, 0);
+    // Real capital figure from the Chart of Accounts — never fabricated to force a match.
+    const ownerEquity = accountHeads.filter(h => h.type === 'Equity').reduce((sum, h) => sum + h.balance, 0);
     const totalLiabilitiesEquity = payables + ownerEquity + retainedEarnings;
-    const balanceDifference = totalAssets - totalLiabilitiesEquity;
+    // Any gap here is a real data-sync problem (e.g. a sale wasn't reflected in bank/receivables/stock)
+    // and should be surfaced, not hidden.
+    const reconciliationGap = totalAssets - totalLiabilitiesEquity;
+    const isBalanced = Math.abs(reconciliationGap) < 1;
 
     return (
       <div className="space-y-6">
@@ -869,17 +862,24 @@ export default function ReportsView({
           </div>
         </div>
 
-        <div className="p-4 bg-indigo-600 text-white rounded-xl flex flex-col sm:flex-row justify-between items-center gap-3">
+        <div className={`p-4 ${isBalanced ? 'bg-indigo-600' : 'bg-rose-600'} text-white rounded-xl flex flex-col sm:flex-row justify-between items-center gap-3`}>
           <div className="flex items-center gap-2">
-            <ShieldCheck className="h-5 w-5 text-indigo-200" />
-            <span className="text-xs font-bold uppercase tracking-wider">Accounting Ledger Equilibrium Statement</span>
+            <ShieldCheck className="h-5 w-5 text-white/80" />
+            <span className="text-xs font-bold uppercase tracking-wider">
+              {isBalanced ? 'Accounting Ledger Equilibrium Statement' : 'Ledger Out of Balance — Data Sync Issue Detected'}
+            </span>
           </div>
-          <span className={`text-xs font-mono font-bold px-3 py-1 rounded ${Math.abs(balanceDifference) < 0.01 ? 'bg-white/10' : 'bg-rose-500/30'}`}>
-            {Math.abs(balanceDifference) < 0.01
-              ? `Balanced: Assets (৳${totalAssets.toLocaleString()}) = Liabilities + Equity (৳${totalLiabilitiesEquity.toLocaleString()})`
-              : `Out of balance by ৳${Math.abs(balanceDifference).toLocaleString()}`}
+          <span className="text-xs font-mono font-bold bg-white/10 px-3 py-1 rounded">
+            {isBalanced
+              ? `Assets (৳${totalAssets.toLocaleString()}) = Liabilities + Equity (৳${totalLiabilitiesEquity.toLocaleString()})`
+              : `Assets (৳${totalAssets.toLocaleString()}) ≠ Liabilities + Equity (৳${totalLiabilitiesEquity.toLocaleString()}) — Gap: ৳${reconciliationGap.toLocaleString()}`}
           </span>
         </div>
+        {!isBalanced && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-[11px] text-amber-800 leading-relaxed">
+            এই gap মানে কোনো sale/purchase আসলে হয়েছে (invoices/purchase orders-এ ধরা পড়েছে) কিন্তু তার সাথে সংশ্লিষ্ট cash, receivable, বা stock ঠিকভাবে আপডেট হয়নি। Bank Accounts, Customers, ও Products-এর ডাটা যাচাই করুন।
+          </div>
+        )}
       </div>
     );
   };
