@@ -1356,6 +1356,55 @@ function AppContent() {
     );
   };
 
+  // Recalculates bankAccounts AND Chart of Accounts balances from scratch by
+  // replaying the real transaction ledger plus current invoices/purchase-orders/
+  // customers/suppliers/products — instead of trusting every historical posting
+  // to have incrementally applied correctly. This fixes drift such as a sale
+  // made before its target bank account / account head even existed yet (the
+  // transaction record was still logged, but the balance update had nothing to
+  // update, so it silently did nothing at the time).
+  const handleRecalculateAccountHeads = () => {
+    // 1. Replay every transaction into bank account balances from zero.
+    const recomputedBankBalances: Record<string, number> = {};
+    bankAccounts.forEach((b) => { recomputedBankBalances[b.id] = 0; });
+    for (const tx of transactions) {
+      const delta = tx.type === 'Deposit' || tx.type === 'Income' ? tx.amount : -tx.amount;
+      if (tx.type === 'Transfer') {
+        if (recomputedBankBalances[tx.accountId] !== undefined) recomputedBankBalances[tx.accountId] -= tx.amount;
+        if (tx.toAccountId && recomputedBankBalances[tx.toAccountId] !== undefined) recomputedBankBalances[tx.toAccountId] += tx.amount;
+      } else if (recomputedBankBalances[tx.accountId] !== undefined) {
+        recomputedBankBalances[tx.accountId] += delta;
+      }
+    }
+    setBankAccounts((prev) => prev.map((b) => ({ ...b, balance: recomputedBankBalances[b.id] ?? b.balance })));
+
+    // 2. Chart of Accounts — cash/bank total from the same replay, everything
+    // else from current real records (these aren't incrementally-drifted since
+    // they're stored directly, e.g. customer.outstandingBalance).
+    const totalCash = Object.values(recomputedBankBalances).reduce((sum, v) => sum + v, 0);
+    const totalReceivable = customers.reduce((sum, c) => sum + (c.outstandingBalance || 0), 0);
+    const totalPayable = suppliers.reduce((sum, s) => sum + (s.outstandingBalance || 0), 0);
+    const totalRevenue = invoices.reduce((sum, inv) => sum + inv.total, 0);
+    const totalInventoryValue = products.reduce((sum, p) => sum + p.stock * p.cost, 0);
+    const totalCOGS = invoices.reduce((sum, inv) => sum + inv.items.reduce((s, item) => {
+      const prod = products.find((p) => p.id === item.productId);
+      return s + (prod ? item.quantity * prod.cost : 0);
+    }, 0), 0);
+
+    setAccountHeads((prev) =>
+      prev.map((ah) => {
+        if (ah.code === '1010') return { ...ah, balance: totalCash };
+        if (ah.code === '1020') return { ...ah, balance: 0 }; // cash is consolidated into 1010 above
+        if (ah.code === '1030') return { ...ah, balance: totalReceivable };
+        if (ah.code === '1040') return { ...ah, balance: totalInventoryValue };
+        if (ah.code === '2010') return { ...ah, balance: totalPayable };
+        if (ah.code === '4010') return { ...ah, balance: totalRevenue };
+        if (ah.code === '5010') return { ...ah, balance: totalCOGS };
+        return ah;
+      })
+    );
+  };
+
   const handleResetData = async () => {
     setLoading(true);
     try {
@@ -1816,6 +1865,7 @@ function AppContent() {
                   onAddAccountHead={handleAddAccountHead}
                   onContraTransfer={handleContraTransfer}
                   onIssueNote={handleIssueNote}
+                  onRecalculateAccountHeads={handleRecalculateAccountHeads}
                   activeSubTab={subTabKey}
                   settings={settings}
                 />
