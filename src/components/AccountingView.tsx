@@ -32,6 +32,7 @@ interface AccountingViewProps {
   onAddAccountHead: (head: Omit<AccountHead, 'id'>) => void;
   onContraTransfer: (fromAccountId: string, toAccountId: string, amount: number, narration: string) => void;
   onIssueNote: (note: { noteType: 'Debit' | 'Credit'; partyId: string; amount: number; reason: string }) => void;
+  onRecalculateAccountHeads?: () => void;
   activeSubTab?: string;
   settings?: AppSettings;
 }
@@ -46,6 +47,7 @@ export default function AccountingView({
   onAddAccountHead,
   onContraTransfer,
   onIssueNote,
+  onRecalculateAccountHeads,
   activeSubTab = 'chart_accounts',
   settings,
 }: AccountingViewProps) {
@@ -335,13 +337,29 @@ export default function AccountingView({
               <h2 className="text-xl font-bold text-slate-800 font-display">Chart of Accounts (COA)</h2>
               <p className="text-xs text-slate-400 mt-1">General ledger ledger index organizing assets, liabilities, equities, revenues, and operating expenses.</p>
             </div>
-            <button
-              onClick={() => setShowAccModal(true)}
-              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-4 py-2.5 rounded-lg shadow-md cursor-pointer transition-all self-start"
-            >
-              <Plus className="h-4 w-4" />
-              <span>Add Account Head</span>
-            </button>
+            <div className="flex items-center gap-2 self-start">
+              {onRecalculateAccountHeads && (
+                <button
+                  onClick={() => {
+                    if (window.confirm('Chart of Accounts-এর ব্যালেন্স real invoices/purchase orders/customers/suppliers/products থেকে পুনরায় হিসাব করে বসানো হবে। এটা historical drift (যেমন কোনো পুরনো sale যেটা account head তৈরির আগে হয়েছিল) ঠিক করে দেবে। চালিয়ে যাবেন?')) {
+                      onRecalculateAccountHeads();
+                    }
+                  }}
+                  className="flex items-center gap-2 bg-white border border-slate-250 hover:bg-slate-50 text-slate-700 font-semibold text-xs px-4 py-2.5 rounded-lg shadow-sm cursor-pointer transition-all"
+                  title="Real invoices/POs/customers/suppliers/products থেকে ব্যালেন্স পুনরায় হিসাব করুন"
+                >
+                  <Repeat className="h-4 w-4" />
+                  <span>Recalculate from Live Data</span>
+                </button>
+              )}
+              <button
+                onClick={() => setShowAccModal(true)}
+                className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold text-xs px-4 py-2.5 rounded-lg shadow-md cursor-pointer transition-all"
+              >
+                <Plus className="h-4 w-4" />
+                <span>Add Account Head</span>
+              </button>
+            </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
