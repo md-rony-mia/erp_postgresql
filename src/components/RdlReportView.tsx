@@ -32,6 +32,58 @@ import {
   Palette,
 } from 'lucide-react';
 
+// Field Registry mapping all 12 collections and their available fields
+const FIELD_REGISTRY: Record<string, { collection: string; fields: string[] }> = {
+  products: {
+    collection: 'Products Ledger',
+    fields: ['id', 'sku', 'name', 'category', 'unit', 'warehouse', 'price', 'cost', 'stock', 'alertQty', 'reservedQty', 'allocatedQty', 'damagedQty', 'brand'],
+  },
+  invoices: {
+    collection: 'Invoices Registry',
+    fields: ['id', 'invoiceNo', 'customerId', 'customerName', 'date', 'subtotal', 'taxRate', 'taxAmount', 'discount', 'total', 'paymentMethod', 'isPaid'],
+  },
+  customers: {
+    collection: 'Customers Database',
+    fields: ['id', 'name', 'phone', 'email', 'group', 'outstandingBalance'],
+  },
+  suppliers: {
+    collection: 'Suppliers Registry',
+    fields: ['id', 'name', 'phone', 'email', 'companyName', 'group', 'outstandingBalance'],
+  },
+  transactions: {
+    collection: 'Transactions Ledger',
+    fields: ['id', 'date', 'description', 'type', 'amount', 'category', 'accountId', 'referenceNo'],
+  },
+  purchaseOrders: {
+    collection: 'Purchase Orders',
+    fields: ['id', 'poNo', 'supplierId', 'supplierName', 'date', 'subtotal', 'total', 'status'],
+  },
+  employees: {
+    collection: 'Employees Directory',
+    fields: ['id', 'name', 'designation', 'department', 'email', 'phone', 'joiningDate', 'salary', 'status'],
+  },
+  attendance: {
+    collection: 'Attendance Records',
+    fields: ['id', 'employeeId', 'employeeName', 'date', 'status', 'checkIn', 'checkOut'],
+  },
+  loanAccounts: {
+    collection: 'Loan Accounts',
+    fields: ['id', 'accountNo', 'borrowerName', 'amount', 'interestRate', 'durationMonths', 'disbursedAmount', 'outstandingAmount', 'status'],
+  },
+  bankAccounts: {
+    collection: 'Bank Accounts',
+    fields: ['id', 'accountName', 'accountNumber', 'bankName', 'balance', 'type'],
+  },
+  accountHeads: {
+    collection: 'Account Heads (Chart of Accounts)',
+    fields: ['id', 'name', 'code', 'type', 'balance'],
+  },
+  branches: {
+    collection: 'Branches',
+    fields: ['id', 'name', 'branchCode', 'address', 'phone', 'managerName', 'status', 'isMainBranch', 'stockMode'],
+  },
+};
+
 interface RdlReportViewProps {
   products: Product[];
   customers: Customer[];
@@ -58,7 +110,7 @@ interface RdlElement {
     borderRadius: string;
   };
   tableConfig?: {
-    dataset: 'products' | 'invoices' | 'customers' | 'suppliers' | 'transactions';
+    dataset: 'products' | 'invoices' | 'customers' | 'suppliers' | 'transactions' | 'purchaseOrders' | 'employees' | 'attendance' | 'loanAccounts' | 'bankAccounts' | 'accountHeads' | 'branches';
     columns: string[];
     showFooter: boolean;
   };
@@ -236,6 +288,8 @@ export default function RdlReportView({
   const [dragOverElementId, setDragOverElementId] = useState<string | null>(null);
   const [showExprBuilder, setShowExprBuilder] = useState(false);
   const [exprText, setExprText] = useState('');
+  const [draggedField, setDraggedField] = useState<{ collection: string; field: string } | null>(null);
+  const [selectedDatasetFilter, setSelectedDatasetFilter] = useState<string>('products');
 
   // RDL Categories
   const categoriesList = ['Accounting Reports', 'Sales Reports', 'Purchase Reports', 'HR & Employee Staffing'];
@@ -437,6 +491,70 @@ export default function RdlReportView({
     setTemplates(updated);
     setActiveTemplateId(newT.id);
     alert(`RDL template "${newT.name}" successfully designed and stored!`);
+  };
+
+  // Handle dropping a field from Field Explorer onto canvas or table
+  const handleFieldDrop = (e: React.DragEvent, targetElementId?: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (!draggedField) return;
+
+    // If dropping on a specific table element
+    if (targetElementId) {
+      const targetElement = selectedTemplate.elements.find((el) => el.id === targetElementId);
+      if (targetElement && targetElement.type === 'table' && targetElement.tableConfig) {
+        // Only add field if it's from the same collection
+        if (targetElement.tableConfig.dataset === draggedField.collection) {
+          const updatedColumns = [...targetElement.tableConfig.columns];
+          if (!updatedColumns.includes(draggedField.field)) {
+            updatedColumns.push(draggedField.field);
+            handleUpdateElement({
+              ...targetElement,
+              tableConfig: { ...targetElement.tableConfig, columns: updatedColumns },
+            });
+          }
+        } else {
+          alert(`Cannot add field from "${FIELD_REGISTRY[draggedField.collection].collection}" to table from "${FIELD_REGISTRY[targetElement.tableConfig.dataset].collection}"`);
+        }
+      }
+    } else {
+      // Dropping on canvas without a target - create a new table with this field
+      const newTableElement: RdlElement = {
+        id: `el_${Date.now()}`,
+        type: 'table',
+        content: '',
+        style: {
+          fontSize: 'text-xs',
+          fontWeight: 'font-semibold',
+          textAlign: 'left',
+          color: '#334155',
+          bgColor: 'transparent',
+          padding: 'p-2',
+          borderWidth: 'border-none',
+          borderColor: '',
+          borderRadius: 'rounded-none',
+        },
+        tableConfig: {
+          dataset: draggedField.collection as any,
+          columns: [draggedField.field],
+          showFooter: true,
+        },
+      };
+
+      const updatedElements = [...selectedTemplate.elements, newTableElement];
+      const updatedTemplates = templates.map((t) => {
+        if (t.id === activeTemplateId) {
+          return { ...t, elements: updatedElements };
+        }
+        return t;
+      });
+
+      setTemplates(updatedTemplates);
+      setSelectedElementId(newTableElement.id);
+    }
+
+    setDraggedField(null);
   };
 
   const activeElement = selectedTemplate.elements.find((el) => el.id === selectedElementId);
@@ -662,6 +780,40 @@ export default function RdlReportView({
             </div>
           </div>
 
+          {/* Field Explorer - Drag fields to canvas */}
+          <div className="space-y-2 pt-3 border-t border-slate-100">
+            <div className="flex items-center justify-between">
+              <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Field Explorer</h4>
+              <span className="text-[8px] font-mono bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded uppercase font-bold">Drag Fields</span>
+            </div>
+            <div>
+              <label className="block text-[8px] text-slate-400 uppercase mb-1.5 font-bold">Collection</label>
+              <select
+                value={selectedDatasetFilter}
+                onChange={(e) => setSelectedDatasetFilter(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 focus:outline-none cursor-pointer text-xs font-semibold text-slate-600"
+              >
+                {Object.entries(FIELD_REGISTRY).map(([key, value]) => (
+                  <option key={key} value={key}>{value.collection}</option>
+                ))}
+              </select>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 p-2 rounded-lg space-y-1 max-h-40 overflow-y-auto custom-scrollbar">
+              {FIELD_REGISTRY[selectedDatasetFilter]?.fields.map((field) => (
+                <div
+                  key={field}
+                  draggable
+                  onDragStart={() => setDraggedField({ collection: selectedDatasetFilter, field })}
+                  onDragEnd={() => setDraggedField(null)}
+                  className="p-2 bg-white border border-slate-200 hover:border-amber-300 hover:bg-amber-50 rounded text-[10px] font-semibold text-slate-600 cursor-grab active:cursor-grabbing hover:text-amber-700 transition-all"
+                  title={`Drag to add "${field}" field to table`}
+                >
+                  <span className="font-mono text-amber-600">📌</span> {field}
+                </div>
+              ))}
+            </div>
+          </div>
+
           {/* Selected Element Style Editor */}
           {activeElement && (
             <div className="space-y-4 pt-3 border-t border-slate-100 animate-fadeIn">
@@ -709,18 +861,17 @@ export default function RdlReportView({
                       value={activeElement.tableConfig.dataset}
                       onChange={(e) => {
                         const ds = e.target.value as any;
-                        const columns = ds === 'products' ? ['sku', 'name', 'stock', 'price'] : ds === 'invoices' ? ['invoiceNo', 'customerName', 'total'] : ['name', 'phone', 'outstandingBalance'];
+                        const defaultColumns = FIELD_REGISTRY[ds]?.fields.slice(0, 4) || [];
                         handleUpdateElement({
                           ...activeElement,
-                          tableConfig: { ...activeElement.tableConfig!, dataset: ds, columns },
+                          tableConfig: { ...activeElement.tableConfig!, dataset: ds, columns: defaultColumns },
                         });
                       }}
                       className="w-full bg-slate-50 border border-slate-200 rounded-lg p-1.5 focus:outline-none cursor-pointer"
                     >
-                      <option value="products">Products Ledger</option>
-                      <option value="invoices">Invoices Registry</option>
-                      <option value="customers">Customers Database</option>
-                      <option value="suppliers">Suppliers Registry</option>
+                      {Object.entries(FIELD_REGISTRY).map(([key, value]) => (
+                        <option key={key} value={key}>{value.collection}</option>
+                      ))}
                     </select>
                   </div>
 
@@ -908,7 +1059,20 @@ export default function RdlReportView({
           <div className="bg-slate-100 border border-slate-200 rounded-xl p-6 flex justify-center overflow-x-auto">
             <div
               id="rdl-printable-sheet"
-              className={`bg-white shadow-xl border border-slate-300 font-sans p-10 text-slate-800 relative transition-all ${
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (draggedField) {
+                  e.dataTransfer!.dropEffect = 'copy';
+                }
+              }}
+              onDrop={(e) => {
+                if (draggedField) {
+                  handleFieldDrop(e);
+                }
+              }}
+              className={`bg-white shadow-xl font-sans p-10 text-slate-800 relative transition-all border-2 ${
+                draggedField ? 'border-amber-400 bg-amber-50/10' : 'border-slate-300'
+              } ${
                 selectedTemplate.pageSize === 'A4'
                   ? selectedTemplate.orientation === 'portrait' ? 'w-[794px] min-h-[1123px]' : 'w-[1123px] min-h-[794px]'
                   : selectedTemplate.orientation === 'portrait' ? 'w-[816px] min-h-[1056px]' : 'w-[1056px] min-h-[816px]'
@@ -942,12 +1106,20 @@ export default function RdlReportView({
                       }}
                       onDragOver={(e) => {
                         e.preventDefault();
-                        if (draggedElementId && draggedElementId !== el.id) setDragOverElementId(el.id);
+                        if (draggedField) {
+                          e.dataTransfer!.dropEffect = 'copy';
+                        } else if (draggedElementId && draggedElementId !== el.id) {
+                          setDragOverElementId(el.id);
+                        }
                       }}
                       onDragLeave={() => setDragOverElementId((prev) => (prev === el.id ? null : prev))}
                       onDrop={(e) => {
                         e.preventDefault();
-                        if (draggedElementId) handleReorderElement(draggedElementId, el.id);
+                        if (draggedField) {
+                          handleFieldDrop(e, el.id);
+                        } else if (draggedElementId) {
+                          handleReorderElement(draggedElementId, el.id);
+                        }
                         setDraggedElementId(null);
                         setDragOverElementId(null);
                       }}
