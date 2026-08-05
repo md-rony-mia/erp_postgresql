@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { validateRequired, validatePositiveNumber } from '../lib/validation';
 import { AccountHead, Transaction, BankAccount, Customer, Supplier, AppSettings } from '../types';
+import { DEMO_SEED_ENABLED } from '../lib/dataClient';
 import {
   BookOpen,
   Calculator,
@@ -93,6 +94,7 @@ export default function AccountingView({
     if (saved) {
       try { return JSON.parse(saved); } catch (e) {}
     }
+    if (!DEMO_SEED_ENABLED) return [];
     return [
       { id: "b_1", department: "Marketing", allocated: 120000, quarter: "Q3 2026", categories: ["Marketing Expense"] },
       { id: "b_2", department: "Operations", allocated: 350000, quarter: "Q3 2026", categories: ["Office Rent", "Utilities Expense"] },
@@ -982,7 +984,7 @@ export default function AccountingView({
           }
           // Adjustment (Debit/Credit Note)
           if (t.category === 'Debit Note') {
-            return { id: t.id, date: t.date, refNo: t.referenceNo || t.id, debitAccount: 'Accounts Payable', creditAccount: 'Cost of Goods Sold', amount: t.amount, notes: t.description, status: 'Matched' as const };
+            return { id: t.id, date: t.date, refNo: t.referenceNo || t.id, debitAccount: 'Accounts Payable', creditAccount: 'Merchandise Inventory', amount: t.amount, notes: t.description, status: 'Matched' as const };
           }
           return { id: t.id, date: t.date, refNo: t.referenceNo || t.id, debitAccount: 'Sales Revenue', creditAccount: 'Accounts Receivable', amount: t.amount, notes: t.description, status: 'Matched' as const };
         }).reverse();
