@@ -1327,10 +1327,6 @@ function AppContent() {
     );
   };
 
-  const handleAddAccountHead = (account: AccountHead) => {
-    setAccountHeads((prev) => [...prev, account]);
-  };
-
   const handleResetData = async () => {
     setLoading(true);
     try {
