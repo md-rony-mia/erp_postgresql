@@ -785,20 +785,28 @@ export default function ReportsView({
 
   // 8. Balance Sheet
   const renderBalanceSheet = () => {
-    // Statements must be derived from the chart of accounts, never from
-    // invoices, supplier balances, or inventory snapshots mixed together.
-    const byCode = (code: string) => accountHeads.find((head) => head.code === code)?.balance || 0;
-    const currentCash = byCode('1010') + byCode('1020');
-    const receivables = byCode('1030');
-    const inventoryVal = accountHeads
-      .filter((head) => ['1040', '1041', '1042'].includes(head.code))
-      .reduce((sum, head) => sum + head.balance, 0);
-    const totalAssets = accountHeads.filter((head) => head.type === 'Asset').reduce((sum, head) => sum + head.balance, 0);
+    // Use operational records while historical transactions are being migrated
+    // to complete journal lines. This keeps legacy cash sales visible in the
+    // statements even when their old COA balance was not posted.
+    const currentCash = bankAccounts.reduce((sum, account) => sum + account.balance, 0);
+    const receivables = customers.reduce((sum, customer) => sum + (customer.outstandingBalance || 0), 0);
+    const inventoryVal = products.reduce((sum, product) => sum + product.stock * product.cost, 0);
+    const totalAssets = currentCash + receivables + inventoryVal;
 
-    const payables = accountHeads.filter((head) => head.type === 'Liability').reduce((sum, head) => sum + head.balance, 0);
-    const totalRevenue = accountHeads.filter((head) => head.type === 'Revenue').reduce((sum, head) => sum + head.balance, 0);
-    const totalExpenses = accountHeads.filter((head) => head.type === 'Expense').reduce((sum, head) => sum + head.balance, 0);
-    const retainedEarnings = totalRevenue - totalExpenses;
+    const payables = suppliers.reduce((sum, supplier) => sum + (supplier.outstandingBalance || 0), 0);
+    const invoiceReferences = new Set(invoices.map((invoice) => invoice.invoiceNo));
+    const unlinkedSales = transactions
+      .filter((transaction) => (transaction.type === 'Deposit' || transaction.type === 'Income') && transaction.category === 'Sales Income' && !invoiceReferences.has(transaction.referenceNo || ''))
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const totalRevenue = invoices.reduce((sum, invoice) => sum + invoice.total, 0) + unlinkedSales;
+    const totalCOGS = invoices.reduce((sum, invoice) => sum + invoice.items.reduce((invoiceCost, item) => {
+      const product = products.find((record) => record.id === item.productId);
+      return invoiceCost + (product ? item.quantity * product.cost : 0);
+    }, 0), 0);
+    const operatingExpenses = transactions
+      .filter((transaction) => transaction.type === 'Expense' && transaction.category !== 'Cost of Goods Sold' && transaction.category !== 'Manufacturing Cost')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const retainedEarnings = totalRevenue - totalCOGS - operatingExpenses;
     const ownerEquity = accountHeads.filter((head) => head.type === 'Equity').reduce((sum, head) => sum + head.balance, 0);
     const totalLiabilitiesEquity = payables + ownerEquity + retainedEarnings;
     const balanceDifference = totalAssets - totalLiabilitiesEquity;
@@ -878,15 +886,22 @@ export default function ReportsView({
 
   // 9. Profit & Loss
   const renderProfitLoss = () => {
-    const totalSales = accountHeads.filter((head) => head.type === 'Revenue').reduce((sum, head) => sum + head.balance, 0);
-    const estimatedCOGS = accountHeads
-      .filter((head) => head.type === 'Expense' && (head.code === '5010' || head.name.toLowerCase().includes('cost of goods')))
-      .reduce((sum, head) => sum + head.balance, 0);
+    // Invoices are the primary source. Unlinked cash-sale transactions are
+    // included once for historical/direct postings that have no invoice.
+    const invoiceReferences = new Set(invoices.map((invoice) => invoice.invoiceNo));
+    const unlinkedSales = transactions
+      .filter((transaction) => (transaction.type === 'Deposit' || transaction.type === 'Income') && transaction.category === 'Sales Income' && !invoiceReferences.has(transaction.referenceNo || ''))
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
+    const totalSales = invoices.reduce((sum, invoice) => sum + invoice.total, 0) + unlinkedSales;
+    const estimatedCOGS = invoices.reduce((sum, invoice) => sum + invoice.items.reduce((invoiceCost, item) => {
+      const product = products.find((record) => record.id === item.productId);
+      return invoiceCost + (product ? item.quantity * product.cost : 0);
+    }, 0), 0);
 
     const grossProfit = totalSales - estimatedCOGS;
-    const operatingExpenses = accountHeads
-      .filter((head) => head.type === 'Expense' && head.code !== '5010' && !head.name.toLowerCase().includes('cost of goods'))
-      .reduce((sum, head) => sum + head.balance, 0);
+    const operatingExpenses = transactions
+      .filter((transaction) => transaction.type === 'Expense' && transaction.category !== 'Cost of Goods Sold' && transaction.category !== 'Manufacturing Cost')
+      .reduce((sum, transaction) => sum + transaction.amount, 0);
 
     const netProfit = grossProfit - operatingExpenses;
 
