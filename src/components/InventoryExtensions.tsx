@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Product } from '../types';
+import { DEMO_SEED_ENABLED } from '../lib/dataClient';
 import {
   Copy,
   Layers,
@@ -45,6 +46,7 @@ export function TemplatesTab({ products }: TabProps) {
   const [templates, setTemplates] = useState<any[]>(() => {
     const saved = localStorage.getItem('nexova_inventory_templates');
     if (saved) return JSON.parse(saved);
+    if (!DEMO_SEED_ENABLED) return [];
     return [
       { id: 't1', name: 'Electronics Gadget Base', category: 'Electronics', defaultCost: 150, defaultPrice: 249, defaultUnit: 'pcs', defaultWarehouse: 'Main Warehouse', alertQty: 5, taxRate: 15 },
       { id: 't2', name: 'Apparel Standard Fit', category: 'Apparel', defaultCost: 12, defaultPrice: 35, defaultUnit: 'pcs', defaultWarehouse: 'Main Warehouse', alertQty: 20, taxRate: 5 },
@@ -267,6 +269,7 @@ export function VariantsTab({ products, onUpdateProducts }: TabProps) {
   const [variants, setVariants] = useState<any[]>(() => {
     const saved = localStorage.getItem('nexova_inventory_variants');
     if (saved) return JSON.parse(saved);
+    if (!DEMO_SEED_ENABLED) return [];
     return [
       { id: 'v1', parentName: 'Enterprise Laptop Pro', sku: 'LAP-PRO-S-BLK', attributes: 'Size: 14", Color: Jet Black', pricePremium: 0, costAdjustment: 0, stock: 15 },
       { id: 'v2', parentName: 'Enterprise Laptop Pro', sku: 'LAP-PRO-L-SLV', attributes: 'Size: 16", Color: Cosmic Silver', pricePremium: 200, costAdjustment: 120, stock: 8 },
@@ -527,6 +530,7 @@ export function MetadataTab() {
   const [metadata, setMetadata] = useState<any[]>(() => {
     const saved = localStorage.getItem('nexova_inventory_metadata');
     if (saved) return JSON.parse(saved);
+    if (!DEMO_SEED_ENABLED) return [];
     return [
       { id: 'm1', key: 'hsn_code', displayName: 'HSN / Harmonized Code', type: 'String', entity: 'products', regex: '^\\d{4,8}$', isRequired: false, isSearchable: true },
       { id: 'm2', key: 'warranty_months', displayName: 'Warranty Period (Months)', type: 'Integer', entity: 'products', regex: '', isRequired: false, isSearchable: false },
@@ -946,6 +950,7 @@ export function LayoutBuilderTab() {
   const [layouts, setLayouts] = useState<any[]>(() => {
     const saved = localStorage.getItem('nexova_inventory_layouts');
     if (saved) return JSON.parse(saved);
+    if (!DEMO_SEED_ENABLED) return [];
     return [
       { id: 'l1', sectionName: 'General Information Block', tabAssignment: 'general', order: 1, columns: 'Half', visible: true },
       { id: 'l2', sectionName: 'Financials & Tax Markup Engine', tabAssignment: 'pricing', order: 2, columns: 'Half', visible: true },
@@ -1072,6 +1077,7 @@ export function AttributesTab() {
   const [attributes, setAttributes] = useState<any[]>(() => {
     const saved = localStorage.getItem('nexova_inventory_attributes');
     if (saved) return JSON.parse(saved);
+    if (!DEMO_SEED_ENABLED) return [];
     return [
       { id: 'a1', code: 'opt_size', label: 'Size Dimensions', type: 'Select', values: 'S, M, L, XL, XXL' },
       { id: 'a2', code: 'opt_color', label: 'Body Color Tone', type: 'Select', values: 'Jet Black, Cosmic Silver, Royal Blue, Rose Gold' },
@@ -1237,6 +1243,7 @@ export function BrandsTab() {
   const [brands, setBrands] = useState<any[]>(() => {
     const saved = localStorage.getItem('nexova_inventory_brands');
     if (saved) return JSON.parse(saved);
+    if (!DEMO_SEED_ENABLED) return [];
     return [
       { id: 'b1', name: 'Nexova Tech', code: 'BR-NXV', country: 'United States', productsCount: 45, status: 'Active', bg: 'bg-indigo-500 text-white' },
       { id: 'b2', name: 'AeroFiber Wear', code: 'BR-AFB', country: 'Germany', productsCount: 22, status: 'Active', bg: 'bg-emerald-500 text-white' },
@@ -1431,6 +1438,7 @@ export function ManufacturersTab() {
   const [manufacturers, setManufacturers] = useState<any[]>(() => {
     const saved = localStorage.getItem('nexova_inventory_manufacturers');
     if (saved) return JSON.parse(saved);
+    if (!DEMO_SEED_ENABLED) return [];
     return [
       { id: 'mf1', name: 'AeroSpace Global Corp', country: 'United States', rating: 5, contact: 'ops@aerospace.com', phone: '+1 (555) 489-0012', status: 'Approved' },
       { id: 'mf2', name: 'Tokyo Electronics Lab', country: 'Japan', rating: 4, contact: 'supply@tel-japan.jp', phone: '+81 3-5555-1234', status: 'Approved' },
@@ -1624,6 +1632,7 @@ export function PricingEngineTab({ products, onUpdateProducts }: TabProps) {
   const [markupRules, setMarkupRules] = useState<any[]>(() => {
     const saved = localStorage.getItem('nexova_inventory_pricing_rules');
     if (saved) return JSON.parse(saved);
+    if (!DEMO_SEED_ENABLED) return [];
     return [
       { id: 'p1', category: 'Electronics', standardMarkup: 30, discountLimit: 10, roundingRule: 'Round up to nearest 0.99' },
       { id: 'p2', category: 'Apparel', standardMarkup: 150, discountLimit: 25, roundingRule: 'Round down to nearest 0.95' },
@@ -1778,6 +1787,7 @@ export function DiscountMatrixTab() {
   const [matrix, setMatrix] = useState<any[]>(() => {
     const saved = localStorage.getItem('nexova_inventory_discount_matrix');
     if (saved) return JSON.parse(saved);
+    if (!DEMO_SEED_ENABLED) return [];
     return [
       { id: 'dm1', tier: 'Wholesale Buyer', category: 'Electronics', minQty: 10, type: 'Percentage', value: 10, validity: 'Dec 2026' },
       { id: 'dm2', tier: 'Distributor VIP', category: 'Electronics', minQty: 50, type: 'Percentage', value: 18, validity: 'Dec 2026' },
@@ -1970,6 +1980,7 @@ export function PromotionManagerTab() {
   const [promos, setPromos] = useState<any[]>(() => {
     const saved = localStorage.getItem('nexova_inventory_promotions');
     if (saved) return JSON.parse(saved);
+    if (!DEMO_SEED_ENABLED) return [];
     return [
       { id: 'pr1', name: 'Summer Carnival Deal', code: 'SUMMER30', type: 'Flat Percentage', value: 30, active: true },
       { id: 'pr2', name: 'Raw Procurement Bonus', code: 'RAWFREE', type: 'Buy X Get Y (BOGO)', value: 1, active: true },

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { DEMO_SEED_ENABLED } from '../lib/dataClient';
 import {
   Settings,
   Plus,
@@ -414,6 +415,7 @@ export function ManageCustomFieldsModal({ onClose, customFields, setCustomFields
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>(() => {
     const saved = localStorage.getItem('nexova_product_audit_logs');
     if (saved) return JSON.parse(saved);
+    if (!DEMO_SEED_ENABLED) return [];
     const mockLogs: AuditLogEntry[] = [
       {
         id: `audit_init_1`,
