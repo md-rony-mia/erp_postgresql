@@ -60,6 +60,7 @@ import {
   onAuthStateChange,
   signOutUser,
   Unsubscribe,
+  DEMO_SEED_ENABLED,
 } from './lib/dataClient';
 
 import {
@@ -92,6 +93,8 @@ import {
   INITIAL_EMPLOYEES,
   INITIAL_ATTENDANCE,
   INITIAL_LOANS,
+  MINIMAL_BOOTSTRAP_ACCOUNT_HEADS,
+  MINIMAL_BOOTSTRAP_BANK_ACCOUNTS,
 } from './data';
 
 const LazyLoadingFallback = () => (
@@ -426,6 +429,23 @@ function AppContent() {
 
         const isDbSeeded = appSettingsDoc?.isDbSeeded === true;
 
+        // Required accounting infrastructure — not demo data. Runs every load,
+        // but seedCollectionIfEmpty/seedIfEmpty is idempotent (only inserts when
+        // the collection is genuinely empty), so this is a no-op once real
+        // accounts exist. Uses zero-balance bootstrap data unless demo mode is on.
+        await Promise.all([
+          seedCollectionIfEmpty(
+            'accountHeads',
+            DEMO_SEED_ENABLED ? INITIAL_ACCOUNT_HEADS : MINIMAL_BOOTSTRAP_ACCOUNT_HEADS,
+            { forceSeed: true }
+          ),
+          seedCollectionIfEmpty(
+            'bankAccounts',
+            DEMO_SEED_ENABLED ? INITIAL_BANK_ACCOUNTS : MINIMAL_BOOTSTRAP_BANK_ACCOUNTS,
+            { forceSeed: true }
+          ),
+        ]);
+
         if (!isDbSeeded) {
           // Brand new database, run initial seeding
           await Promise.all([
@@ -434,9 +454,7 @@ function AppContent() {
             seedCollectionIfEmpty('suppliers', INITIAL_SUPPLIERS),
             seedCollectionIfEmpty('invoices', INITIAL_INVOICES),
             seedCollectionIfEmpty('purchaseOrders', INITIAL_PO),
-            seedCollectionIfEmpty('bankAccounts', INITIAL_BANK_ACCOUNTS),
             seedCollectionIfEmpty('transactions', INITIAL_TRANSACTIONS),
-            seedCollectionIfEmpty('accountHeads', INITIAL_ACCOUNT_HEADS),
             seedCollectionIfEmpty('employees', INITIAL_EMPLOYEES),
             seedCollectionIfEmpty('attendances', INITIAL_ATTENDANCE),
             seedCollectionIfEmpty('loanAccounts', INITIAL_LOANS),
@@ -990,13 +1008,23 @@ function AppContent() {
         })
       );
     } else {
-      // Cash/Mobile Deposit instantly
-      const targetBankIdx = newInvoice.paymentMethod === 'Mobile Banking' ? 2 : 0; // index of bank to deposit
-      setBankAccounts((prev) =>
-        prev.map((b, idx) =>
-          idx === targetBankIdx ? { ...b, balance: b.balance + newInvoice.total } : b
-        )
-      );
+      // Cash/Mobile Deposit instantly — look up a real matching account instead of
+      // assuming a fixed array position (which breaks whenever the account list
+      // doesn't happen to have that many entries in that exact order).
+      const targetBank =
+        (newInvoice.paymentMethod === 'Mobile Banking'
+          ? bankAccounts.find((b) => b.type === 'Mobile')
+          : bankAccounts.find((b) => b.type !== 'Mobile')) || bankAccounts[0];
+
+      if (!targetBank) {
+        console.warn(`No bank account exists to post this ${newInvoice.paymentMethod} sale to. Create a bank account first — cash will not be tracked otherwise.`);
+      } else {
+        setBankAccounts((prev) =>
+          prev.map((b) =>
+            b.id === targetBank.id ? { ...b, balance: b.balance + newInvoice.total } : b
+          )
+        );
+      }
 
       const newTx: Transaction = {
         id: `tx_dynamic_${Date.now()}`,
@@ -1004,7 +1032,7 @@ function AppContent() {
         description: `${newInvoice.paymentMethod} sale matching invoice ${newInvoice.invoiceNo}`,
         type: 'Deposit',
         amount: newInvoice.total,
-        accountId: bankAccounts[targetBankIdx]?.id || 'b1',
+        accountId: targetBank?.id || 'b1',
         category: 'Sales Income',
         referenceNo: newInvoice.invoiceNo,
       };

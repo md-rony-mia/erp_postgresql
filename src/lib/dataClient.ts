@@ -323,9 +323,10 @@ export const DEMO_SEED_ENABLED =
 
 export async function seedCollectionIfEmpty<T extends { id: string }>(
   collectionName: string,
-  initialData: T[]
+  initialData: T[],
+  options?: { forceSeed?: boolean }
 ): Promise<T[]> {
-  if (!DEMO_SEED_ENABLED) {
+  if (!DEMO_SEED_ENABLED && !options?.forceSeed) {
     // Just read whatever is really in the database — no fabricated fallback rows.
     return fetchCollectionFromFirestore<T>(collectionName);
   }
