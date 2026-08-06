@@ -91,6 +91,7 @@ export const WindowManagerProvider: React.FC<{ children: ReactNode }> = ({ child
       reports: { bn: 'রিপোর্টস ও অ্যানালিটিক্স', icon: 'BarChart3' },
       gridReport: { bn: 'গ্রিড রিপোর্ট বিল্ডার', icon: 'Grid' },
       rdlReport: { bn: 'রিপোর্ট ডিজাইনার', icon: 'FileSpreadsheet' },
+      customReportModule: { bn: 'কাস্টম রিপোর্ট ডিজাইনার', icon: 'FileText' },
       settings: { bn: 'সিস্টেম সেটিংস', icon: 'Settings' },
     };
 

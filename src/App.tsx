@@ -31,6 +31,7 @@ const PurchaseView = lazyWithRetry(() => import('./components/PurchaseView'));
 const EmployeeView = lazyWithRetry(() => import('./components/EmployeeView'));
 const BankingAndLoanView = lazyWithRetry(() => import('./components/BankingAndLoanView'));
 const ReportsView = lazyWithRetry(() => import('./components/ReportsView'));
+const CustomReportsHub = lazyWithRetry(() => import('./components/customReports/CustomReportsHub'));
 
 import AccountingView from './components/AccountingView';
 import { getUnitCostForSale, consumeBatchesForSale } from './lib/inventoryCosting';
@@ -1965,6 +1966,14 @@ function AppContent() {
             </ErrorBoundary>
           )}
 
+          {tabKey === 'customReportModule' && (
+            <ErrorBoundary variant="section" sectionName="Custom Report Designer Module">
+              <Suspense fallback={<LazyLoadingFallback />}>
+                <CustomReportsHub />
+              </Suspense>
+            </ErrorBoundary>
+          )}
+
           {tabKey === 'crm' && (
             <ErrorBoundary variant="section" sectionName="CRM & Leads Module">
               <CRMView activeSubTab={subTabKey} currentUser={currentUser} />
@@ -2034,7 +2043,7 @@ function AppContent() {
           )}
 
           {/* Quick empty fallback screen for other secondary/reports links to prevent app crashes */}
-          {!['dashboard', 'inventory', 'sales', 'purchase', 'employee', 'accounting', 'banking', 'loan', 'settings', 'reports', 'gridReport', 'rdlReport', 'crm', 'projects', 'manufacturing', 'service', 'documents', 'workflow', 'ai', 'integration'].includes(
+          {!['dashboard', 'inventory', 'sales', 'purchase', 'employee', 'accounting', 'banking', 'loan', 'settings', 'reports', 'gridReport', 'rdlReport', 'customReportModule', 'crm', 'projects', 'manufacturing', 'service', 'documents', 'workflow', 'ai', 'integration'].includes(
             tabKey
           ) && (
             <div className="bg-white border border-slate-200/80 rounded-2xl p-12 text-center max-w-xl mx-auto space-y-4 shadow-sm">

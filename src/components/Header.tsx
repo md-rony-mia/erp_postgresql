@@ -103,6 +103,7 @@ export default function Header({
       reports: 'Reports',
       gridReport: 'Grid Report',
       rdlReport: 'Report Designer',
+      customReportModule: 'Custom Report Designer',
       settings: 'Settings',
       employee: 'Employee',
       salary: 'Salary',

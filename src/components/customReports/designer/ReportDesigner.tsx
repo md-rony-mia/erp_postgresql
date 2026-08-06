@@ -5,15 +5,16 @@ import { PropertyPanel } from './PropertyPanel';
 import { ParameterPanel } from './ParameterPanel';
 import { PreviewPane } from './PreviewPane';
 import { useCustomReport } from '../../../hooks/useCustomReport';
-import type { ReportComponent } from '../../../types/customReport.types';
+import type { ReportComponent, CustomReportDefinition } from '../../../types/customReport.types';
 import { Save, Eye, Pencil, Plus } from 'lucide-react';
 
 function findComponent(
-  reportDef: { bands: Record<string, { components?: ReportComponent[] }> },
+  reportDef: Pick<CustomReportDefinition, 'bands'>,
   id: string
 ): ReportComponent | null {
   for (const band of Object.values(reportDef.bands)) {
-    const comp = band.components?.find((c) => c.id === id);
+    if (!band) continue;
+    const comp = band.components?.find((c: ReportComponent) => c.id === id);
     if (comp) return comp;
   }
   return null;
