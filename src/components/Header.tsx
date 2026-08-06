@@ -102,7 +102,7 @@ export default function Header({
       loan: 'Loan',
       reports: 'Reports',
       gridReport: 'Grid Report',
-      rdlReport: 'RDL Report',
+      rdlReport: 'Report Designer',
       settings: 'Settings',
       employee: 'Employee',
       salary: 'Salary',

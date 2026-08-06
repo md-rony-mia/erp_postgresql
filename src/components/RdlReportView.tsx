@@ -241,6 +241,7 @@ export default function RdlReportView({
   // States
   const [templates, setTemplates] = useState<RdlTemplate[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isExporting, setIsExporting] = useState<'pdf' | 'xlsx' | null>(null);
 
   useEffect(() => {
     async function loadData() {
@@ -453,6 +454,53 @@ export default function RdlReportView({
       return t;
     });
     setTemplates(updatedTemplates);
+  };
+
+  // Sends the already-rendered on-screen paper sheet (#rdl-printable-sheet) to the
+  // jsreport engine (mounted server-side at /jsreport) for a real PDF/Excel export —
+  // replaces the old window.print()-only flow, which never produced a downloadable file.
+  const handleExportReport = async (format: 'pdf' | 'xlsx') => {
+    const sheetEl = document.getElementById('rdl-printable-sheet');
+    if (!sheetEl) return;
+
+    setIsExporting(format);
+    try {
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8" />
+        <script src="https://cdn.tailwindcss.com"></script>
+        <style>body{margin:0;background:#fff;} @page{size:${selectedTemplate.pageSize} ${selectedTemplate.orientation};margin:0;}</style>
+        </head><body>${sheetEl.outerHTML}</body></html>`;
+
+      const res = await fetch('/jsreport/api/report/rdl-export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          template: {
+            content: html,
+            engine: 'none',
+            recipe: format === 'pdf' ? 'chrome-pdf' : 'html-to-xlsx',
+            chrome: format === 'pdf' ? { landscape: selectedTemplate.orientation === 'landscape', format: selectedTemplate.pageSize } : undefined,
+          },
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: res.statusText }));
+        throw new Error(err.message || 'Report engine failed');
+      }
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${selectedTemplate.name.replace(/\s+/g, '_')}.${format}`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Report export failed:', err);
+      alert(`রিপোর্ট এক্সপোর্ট ব্যর্থ হয়েছে: ${err instanceof Error ? err.message : 'অজানা সমস্যা'}`);
+    } finally {
+      setIsExporting(null);
+    }
   };
 
   // Reposition an element by dragging it before/onto another element in the page flow.
@@ -1047,10 +1095,31 @@ export default function RdlReportView({
             </div>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => window.print()}
-                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                onClick={() => window.open('/jsreport/studio/', '_blank')}
+                className="px-3.5 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                title="Advanced template editing (Handlebars, headers/footers, scripts) in jsreport Studio"
               >
-                <Printer className="h-4 w-4" /> Trigger Print View
+                <Layout className="h-4 w-4" /> Open Studio
+              </button>
+              <button
+                onClick={() => window.print()}
+                className="px-3.5 py-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <Printer className="h-4 w-4" /> Print
+              </button>
+              <button
+                onClick={() => handleExportReport('xlsx')}
+                disabled={isExporting !== null}
+                className="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <FileCheck className="h-4 w-4" /> {isExporting === 'xlsx' ? 'Exporting…' : 'Export Excel'}
+              </button>
+              <button
+                onClick={() => handleExportReport('pdf')}
+                disabled={isExporting !== null}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+              >
+                <FileText className="h-4 w-4" /> {isExporting === 'pdf' ? 'Exporting…' : 'Export PDF'}
               </button>
             </div>
           </div>
