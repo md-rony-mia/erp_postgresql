@@ -40,6 +40,19 @@ export function createReportEngineApp(): { app: Express; ready: Promise<any> } {
     // Without this explicit value jsreport-core throws at construction time.
     parentModuleDirectory: process.cwd(),
     discover: false,
+    // jsreport-studio hardcodes its HTML page to reference assets at an absolute path
+    // (e.g. "/studio/assets/client.<hash>.js"). Since this whole reporter is mounted
+    // under /jsreport in server.ts, without appPath those asset requests land on
+    // "/studio/assets/..." at the ERP app root, which the SPA's catch-all route
+    // (app.get('*', ...) in server.ts) answers with index.html instead of the real
+    // JS/CSS — so Studio silently fails to boot and the browser tab ends up running
+    // the main ERP React app (landing on the default Executive Dashboard route).
+    // appPath tells jsreport-express/jsreport-studio to prefix generated asset URLs
+    // with /jsreport/ so they resolve correctly. Do NOT also set mountOnAppPath —
+    // that would make jsreport-express mount itself under /jsreport a second time,
+    // double-prefixing routes, since we already mount jsreportApp at /jsreport
+    // ourselves via app.use("/jsreport", reportEngineApp) in server.ts.
+    appPath: '/jsreport/',
     extensions: {
       express: { app: jsreportApp, start: false },
     },
