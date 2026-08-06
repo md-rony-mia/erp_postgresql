@@ -7,6 +7,7 @@ import jsreportFsStore from 'jsreport-fs-store';
 import jsreportChromePdf from 'jsreport-chrome-pdf';
 import jsreportHtmlToXlsx from 'jsreport-html-to-xlsx';
 import jsreportStudio from 'jsreport-studio';
+import jsreportTemplates from 'jsreport-templates';
 import path from 'path';
 
 /**
@@ -59,6 +60,7 @@ export function createReportEngineApp(): { app: Express; ready: Promise<any> } {
   });
 
   reporter.use(jsreportExpress());
+  reporter.use(jsreportTemplates());
   reporter.use(jsreportHandlebars());
   reporter.use(jsreportFsStore());
   reporter.use(jsreportChromePdf());
