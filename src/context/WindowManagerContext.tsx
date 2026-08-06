@@ -90,7 +90,7 @@ export const WindowManagerProvider: React.FC<{ children: ReactNode }> = ({ child
       integration: { bn: 'থার্ড-পার্টি ইন্টিগ্রেশন', icon: 'Cpu' },
       reports: { bn: 'রিপোর্টস ও অ্যানালিটিক্স', icon: 'BarChart3' },
       gridReport: { bn: 'গ্রিড রিপোর্ট বিল্ডার', icon: 'Grid' },
-      rdlReport: { bn: 'আরডিএল রিপোর্ট টেমপ্লেট', icon: 'FileSpreadsheet' },
+      rdlReport: { bn: 'রিপোর্ট ডিজাইনার', icon: 'FileSpreadsheet' },
       settings: { bn: 'সিস্টেম সেটিংস', icon: 'Settings' },
     };
 

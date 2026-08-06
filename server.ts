@@ -5,6 +5,7 @@ import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { apiRouter } from "./src/server/routes.ts";
 import { setupRealtime } from "./src/server/realtime.ts";
+import { createReportEngineApp } from "./src/server/reportEngine.ts";
 
 dotenv.config();
 
@@ -21,6 +22,14 @@ app.use(express.json());
 
 // Postgres-backed data/auth/branch-stock/error-log API (replaces Firestore)
 app.use("/api", apiRouter);
+
+// jsreport-powered report engine (replaces the old window.print()-only RDL builder).
+// Mounted as an isolated sub-app so jsreport's internal routes never collide with /api above.
+const { app: reportEngineApp, ready: reportEngineReady } = createReportEngineApp();
+app.use("/jsreport", reportEngineApp);
+reportEngineReady
+  .then(() => console.log("jsreport report engine ready at /jsreport"))
+  .catch(() => console.warn("jsreport report engine failed to start — PDF/Excel export from the Reports module will not work until this is fixed"));
 
 // Initialize Gemini SDK with telemetry header
 const ai = new GoogleGenAI({
