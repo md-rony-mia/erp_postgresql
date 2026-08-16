@@ -33,6 +33,7 @@ interface AccountingViewProps {
   onContraTransfer: (fromAccountId: string, toAccountId: string, amount: number, narration: string) => void;
   onIssueNote: (note: { noteType: 'Debit' | 'Credit'; partyId: string; amount: number; reason: string }) => void;
   onRecalculateAccountHeads?: () => void;
+  onReceiveCustomerPayment?: (customerId: string, amount: number, invoiceId?: string) => void;
   activeSubTab?: string;
   settings?: AppSettings;
 }
@@ -48,6 +49,7 @@ export default function AccountingView({
   onContraTransfer,
   onIssueNote,
   onRecalculateAccountHeads,
+  onReceiveCustomerPayment,
   activeSubTab = 'chart_accounts',
   settings,
 }: AccountingViewProps) {
@@ -572,17 +574,34 @@ export default function AccountingView({
               <h2 className="text-xl font-bold text-slate-800 font-display">Revenue & Deposits Inflow</h2>
               <p className="text-xs text-slate-400 mt-1">Log interest credits, rentals, sales revenues, and secondary capital inflows.</p>
             </div>
-            <button
-              onClick={() => {
-                setTxType('Income');
-                setCategory('Other Revenue');
-                setShowTxModal(true);
-              }}
-              className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 py-2.5 rounded-lg shadow-md cursor-pointer transition-all"
-            >
-              <ArrowUpRight className="h-4 w-4" />
-              <span>Record Capital Inflow</span>
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={() => {
+                  setTxType('Income');
+                  setCategory('Other Revenue');
+                  setShowTxModal(true);
+                }}
+                className="flex items-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold text-xs px-4 py-2.5 rounded-lg shadow-md cursor-pointer transition-all"
+              >
+                <ArrowUpRight className="h-4 w-4" />
+                <span>Record Capital Inflow</span>
+              </button>
+              {onReceiveCustomerPayment && (
+                <button
+                  onClick={() => {
+                    const showCustId = prompt("Enter Customer ID to receive payment:");
+                    if (!showCustId) return;
+                    const showAmt = prompt("Enter amount:");
+                    if (!showAmt) return;
+                    onReceiveCustomerPayment(showCustId, parseFloat(showAmt));
+                  }}
+                  className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-xs px-4 py-2.5 rounded-lg shadow-md cursor-pointer transition-all"
+                >
+                  <DollarSign className="h-4 w-4" />
+                  <span>Receive Customer Payment</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="bg-white border border-slate-200/80 rounded-2xl shadow-sm overflow-hidden">

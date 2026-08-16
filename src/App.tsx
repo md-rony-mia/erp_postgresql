@@ -1867,6 +1867,7 @@ function AppContent() {
                   onContraTransfer={handleContraTransfer}
                   onIssueNote={handleIssueNote}
                   onRecalculateAccountHeads={handleRecalculateAccountHeads}
+                  onReceiveCustomerPayment={handleRecordCollection}
                   activeSubTab={subTabKey}
                   settings={settings}
                 />
